@@ -4,6 +4,7 @@ using System.IO;
 using System.Reflection;
 using System.Text.RegularExpressions;
 using Jellyfin.Plugin.FilterSearch.Configuration;
+using Jellyfin.Plugin.FilterSearch.Helpers;
 using MediaBrowser.Common.Configuration;
 using MediaBrowser.Common.Plugins;
 using MediaBrowser.Model.Plugins;
@@ -21,16 +22,6 @@ namespace Jellyfin.Plugin.FilterSearch
     {
         private readonly IApplicationPaths _appPaths;
         private readonly ILogger<Plugin> _logger;
-
-        /// <summary>
-        /// Start comment marker for the injected script block.
-        /// </summary>
-        public static readonly string StartComment = "<!-- BEGIN Filter Search Plugin -->";
-
-        /// <summary>
-        /// End comment marker for the injected script block.
-        /// </summary>
-        public static readonly string EndComment = "<!-- END Filter Search Plugin -->";
 
         /// <summary>
         /// Initializes a new instance of the <see cref="Plugin"/> class.
@@ -66,53 +57,6 @@ namespace Jellyfin.Plugin.FilterSearch
         public string IndexHtmlPath => Path.Combine(_appPaths.WebPath, "index.html");
 
         /// <summary>
-        /// Gets the embedded JavaScript code for the filter search functionality.
-        /// </summary>
-        /// <returns>The JavaScript code as a string.</returns>
-        public string GetFilterSearchScript()
-        {
-            try
-            {
-                var assembly = Assembly.GetExecutingAssembly();
-                var resourceName = "Jellyfin.Plugin.FilterSearch.Scripts.filter-search.js";
-
-                using var stream = assembly.GetManifestResourceStream(resourceName);
-                if (stream == null)
-                {
-                    _logger.LogError("Could not find embedded resource: {ResourceName}", resourceName);
-                    return string.Empty;
-                }
-
-                using var reader = new StreamReader(stream);
-                return reader.ReadToEnd();
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error reading embedded filter-search.js script");
-                return string.Empty;
-            }
-        }
-
-        /// <summary>
-        /// Builds the injection block containing the script wrapped in comment markers.
-        /// </summary>
-        /// <returns>The HTML/script block to inject.</returns>
-        public string BuildInjectionBlock()
-        {
-            var script = GetFilterSearchScript();
-            if (string.IsNullOrEmpty(script))
-            {
-                return string.Empty;
-            }
-
-            return $@"{StartComment}
-<script>
-{script}
-</script>
-{EndComment}";
-        }
-
-        /// <summary>
         /// Injects the filter search script into index.html.
         /// </summary>
         public void InjectScript()
@@ -131,7 +75,7 @@ namespace Jellyfin.Plugin.FilterSearch
                 return;
             }
 
-            var injectionBlock = BuildInjectionBlock();
+            var injectionBlock = JavascriptHelper.BuildInjectionBlock();
             if (string.IsNullOrEmpty(injectionBlock))
             {
                 _logger.LogError("Failed to build injection block - script is empty");
@@ -150,7 +94,7 @@ namespace Jellyfin.Plugin.FilterSearch
                 }
 
                 // Remove any existing injection block first
-                var cleanupRegex = new Regex($"{Regex.Escape(StartComment)}[\\s\\S]*?{Regex.Escape(EndComment)}", RegexOptions.Multiline);
+                var cleanupRegex = new Regex($"{Regex.Escape(JavascriptHelper.StartComment)}[\\s\\S]*?{Regex.Escape(JavascriptHelper.EndComment)}", RegexOptions.Multiline);
                 content = cleanupRegex.Replace(content, string.Empty);
 
                 // Inject before </body>
@@ -186,7 +130,7 @@ namespace Jellyfin.Plugin.FilterSearch
             try
             {
                 var content = File.ReadAllText(indexPath);
-                var cleanupRegex = new Regex($"{Regex.Escape(StartComment)}[\\s\\S]*?{Regex.Escape(EndComment)}\\s*", RegexOptions.Multiline);
+                var cleanupRegex = new Regex($"{Regex.Escape(JavascriptHelper.StartComment)}[\\s\\S]*?{Regex.Escape(JavascriptHelper.EndComment)}\\s*", RegexOptions.Multiline);
 
                 if (cleanupRegex.IsMatch(content))
                 {

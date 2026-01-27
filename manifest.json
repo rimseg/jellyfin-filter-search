@@ -9,11 +9,19 @@
     "imageUrl": "https://raw.githubusercontent.com/rimseg/jellyfin-filter-search/main/icon.png",
     "versions": [
       {
-        "changelog": "- Initial release",
+        "changelog": "- Added File Transformation plugin support for Docker compatibility\n- Improved injection mechanism",
+        "targetAbi": "10.11.0.0",
+        "version": "1.1.0.0",
+        "sourceUrl": "https://github.com/rimseg/jellyfin-filter-search/releases/download/1.1.0.0/Jellyfin.Plugin.FilterSearch_10.11.6.zip",
+        "checksum": "8cb0d34a328ddc8ff8a7e4aa66bfb40d",
+        "timestamp": "2026-01-27T00:00:00"
+      },
+      {
+        "changelog": "- Added File Transformation plugin support for Docker compatibility\n- Improved injection mechanism",
         "targetAbi": "10.10.7.0",
-        "version": "1.0.0.0",
-        "sourceUrl": "https://github.com/rimseg/jellyfin-filter-search/releases/download/1.0.0.0/Jellyfin.Plugin.FilterSearch_10.10.7.zip",
-        "checksum": "ff34f27abf4fef3346207bcf4c22a5ad",
+        "version": "1.1.0.0",
+        "sourceUrl": "https://github.com/rimseg/jellyfin-filter-search/releases/download/1.1.0.0/Jellyfin.Plugin.FilterSearch_10.10.7.zip",
+        "checksum": "1f73df1dc1a4bdd8aef4fe733662e6b1",
         "timestamp": "2026-01-27T00:00:00"
       }
     ]

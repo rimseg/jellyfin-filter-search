@@ -1,14 +1,14 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <JellyfinVersion>10.10.7</JellyfinVersion>
-    <!-- <JellyfinVersion>10.11.0</JellyfinVersion> -->
-    <TargetFramework Condition="$(JellyfinVersion.StartsWith('10.11.0'))">net9.0</TargetFramework>
+    <!-- <JellyfinVersion>10.10.7</JellyfinVersion> -->
+    <JellyfinVersion>10.11.6</JellyfinVersion>
+    <TargetFramework Condition="$(JellyfinVersion.StartsWith('10.11'))">net9.0</TargetFramework>
     <TargetFramework Condition="'$(JellyfinVersion)' == '10.10.7'">net8.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
-    <AssemblyVersion>1.0.0.0</AssemblyVersion>
-    <FileVersion>1.0.0.0</FileVersion>
+    <AssemblyVersion>1.1.0.0</AssemblyVersion>
+    <FileVersion>1.1.0.0</FileVersion>
     <RootNamespace>Jellyfin.Plugin.FilterSearch</RootNamespace>
     <AssemblyName>Jellyfin.Plugin.FilterSearch</AssemblyName>
   </PropertyGroup>
@@ -16,6 +16,16 @@
   <ItemGroup>
     <PackageReference Include="Jellyfin.Controller" Version="$(JellyfinVersion)"/>
     <PackageReference Include="Jellyfin.Model" Version="$(JellyfinVersion)"/>
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.1" />
+  </ItemGroup>
+
+  <!-- Version-specific file inclusion -->
+  <ItemGroup Condition="'$(JellyfinVersion)' != '10.10.7'">
+    <Compile Remove="JellyfinVersionSpecific/10.10.7/*.cs" />
+  </ItemGroup>
+
+  <ItemGroup Condition="!$(JellyfinVersion.StartsWith('10.11'))">
+    <Compile Remove="JellyfinVersionSpecific/10.11.0/*.cs" />
   </ItemGroup>
 
   <ItemGroup>
