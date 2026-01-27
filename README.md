@@ -1,48 +1,33 @@
-# Jellyfin Filter Search Plugin
+<p align="center">
+  <img src="icon.png" alt="Filter Search Plugin" width="128" height="128">
+</p>
 
-A Jellyfin web client plugin that adds search functionality to filter dialogs (tags, genres, studios, years, etc.) and automatically displays enabled/selected filters at the top of the list.
+<h1 align="center">Jellyfin Filter Search Plugin</h1>
+
+<p align="center">
+  A Jellyfin plugin that adds search functionality to filter dialogs and displays enabled filters at the top.
+</p>
 
 ## Features
 
-- **Search Bar**: Adds a search input to filter sections for quick filtering
-- **Selected Items on Top**: Automatically moves enabled/checked filters to the top of the list
-- **Real-time Filtering**: Instantly filters items as you type
-- **Native Look**: Styled to match Jellyfin's native appearance
+- **Search through filter options** – Quickly find tags, genres, studios, years, and more
+- **Selected filters at top** – Enabled/checked filters are automatically shown at the top
+- **Sticky search bar** – The search input stays visible while scrolling
+- **Works everywhere** – Compatible with all Jellyfin filter dialogs
 
 ## Installation
 
-### Step 1: Copy the plugin file to Jellyfin
+1. Go to **Dashboard** → **Plugins** → **Repositories**
+2. Add the Filter Search repository:
+   ```
+   https://raw.githubusercontent.com/rimseg/jellyfin-filter-search/main/manifest.json
+   ```
+3. Go to **Catalog** and install **Filter Search**
+4. Restart Jellyfin
 
-**Linux:**
-```bash
-sudo mkdir -p /usr/share/jellyfin/web/plugins
-sudo cp filter-search.js /usr/share/jellyfin/web/plugins/
-```
+## Configuration
 
-**Windows:**
-```powershell
-mkdir "C:\Program Files\Jellyfin\Server\jellyfin-web\plugins"
-copy filter-search.js "C:\Program Files\Jellyfin\Server\jellyfin-web\plugins\"
-```
-
-### Step 2: Add the script to index.html
-
-Edit the `index.html` file in Jellyfin's web directory and add this line before `</body>`:
-
-```html
-<script src="plugins/filter-search.js"></script>
-```
-
-**Linux (one-liner):**
-```bash
-sudo sed -i 's|</body>|<script src="plugins/filter-search.js"></script>\n</body>|' /usr/share/jellyfin/web/index.html
-```
-
-### Step 3: Clear browser cache
-
-Hard refresh your browser (Ctrl+Shift+R) or clear the cache completely.
-
----
+After installation, go to **Dashboard** → **Plugins** → **Filter Search** to enable/disable the plugin.
 
 ## Usage
 
@@ -52,31 +37,46 @@ Hard refresh your browser (Ctrl+Shift+R) or clear the cache completely.
 4. A search bar will appear at the top of the section
 5. Selected filters are automatically shown at the top with a "Selected" label
 
----
+## Building from Source
 
-## Uninstallation
+### Prerequisites
 
-1. Remove the script tag from `index.html`:
-   ```bash
-   sudo sed -i '/filter-search.js/d' /usr/share/jellyfin/web/index.html
-   ```
+- .NET 8 SDK (for Jellyfin 10.10.x) or .NET 9 SDK (for Jellyfin 10.11.x)
 
-2. Delete the plugin file:
-   ```bash
-   sudo rm /usr/share/jellyfin/web/plugins/filter-search.js
-   ```
+### Build
 
-3. Clear browser cache
+```bash
+cd Jellyfin.Plugin.FilterSearch
+dotnet build -c Release
+```
 
----
+The built plugin will be in `bin/Release/net8.0/`.
+
+### Install Manually
+
+Copy `Jellyfin.Plugin.FilterSearch.dll` to your Jellyfin plugins directory:
+- **Linux:** `~/.local/share/jellyfin/plugins/FilterSearch/`
+- **Windows:** `%APPDATA%\Jellyfin\Server\plugins\FilterSearch\`
+- **Docker:** `/config/plugins/FilterSearch/`
+
+Then restart Jellyfin.
+
+### Building for Different Jellyfin Versions
+
+Edit the `JellyfinVersion` property in `Jellyfin.Plugin.FilterSearch.csproj`:
+
+```xml
+<!-- For Jellyfin 10.10.x -->
+<JellyfinVersion>10.10.7</JellyfinVersion>
+
+<!-- For Jellyfin 10.11.x -->
+<JellyfinVersion>10.11.0</JellyfinVersion>
+```
 
 ## Notes
 
 - The search bar only appears in sections with 5+ items
-- Updates to Jellyfin may overwrite `index.html`, requiring re-adding the script tag
-- Works with Jellyfin 10.8.x and later
-
----
+- Works with Jellyfin 10.10.x and later
 
 ## License
 
