@@ -8,6 +8,39 @@
   A Jellyfin plugin that adds search functionality to filter dialogs and displays enabled filters at the top.
 </p>
 
+---
+
+## ⚠️ IMPORTANT: Required Setup After Installation
+
+> **This plugin needs write access to `index.html` to inject JavaScript into the Jellyfin web interface.**
+>
+> After installing the plugin, you **must** run one of the following commands depending on your setup:
+
+### 🐧 Linux (Native Installation)
+```bash
+sudo chown jellyfin:jellyfin /usr/share/jellyfin/web/index.html
+sudo systemctl restart jellyfin
+```
+
+### 🐳 Docker
+**Option A:** Install the [File Transformation Plugin](https://github.com/IAmParadox27/jellyfin-plugin-file-transformation) (recommended)
+
+**Option B:** Map `index.html` as a volume:
+```bash
+# Copy index.html from container
+docker cp jellyfin:/usr/share/jellyfin/web/index.html /path/to/config/index.html
+
+# Add to your docker-compose.yml volumes:
+- /path/to/config/index.html:/usr/share/jellyfin/web/index.html
+```
+
+### 🪟 Windows
+The plugin should work without additional setup on Windows.
+
+> **Note:** The `chown` command may need to be re-run after Jellyfin updates, as the update process may reset file ownership.
+
+---
+
 ## Features
 
 - **Search through filter options** – Quickly find tags, genres, studios, years, and more
@@ -24,6 +57,7 @@
    ```
 3. Go to **Catalog** and install **Filter Search**
 4. Restart Jellyfin
+5. **⚠️ Follow the [Required Setup](#️-important-required-setup-after-installation) above!**
 
 ## Configuration
 
