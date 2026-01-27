@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="icon.png" alt="Filter Search Plugin" width="128" height="128">
+  <img src="icon-cutout.png" alt="Filter Search Plugin" width="300" height="300">
 </p>
 
 <h1 align="center">Jellyfin Filter Search Plugin</h1>
