@@ -21,12 +21,6 @@ namespace Jellyfin.Plugin.FilterSearch.Helpers
                 return content.Contents ?? string.Empty;
             }
 
-            // Check if plugin is enabled
-            if (Plugin.Instance?.Configuration?.Enabled != true)
-            {
-                return content.Contents;
-            }
-
             var injectionBlock = JavascriptHelper.BuildInjectionBlock();
 
             if (string.IsNullOrEmpty(injectionBlock))

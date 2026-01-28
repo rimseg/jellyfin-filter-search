@@ -12,12 +12,7 @@ namespace Jellyfin.Plugin.FilterSearch.Configuration
         /// </summary>
         public PluginConfiguration()
         {
-            Enabled = true;
+            // Configuration options can be added here in the future
         }
-
-        /// <summary>
-        /// Gets or sets a value indicating whether the filter search is enabled.
-        /// </summary>
-        public bool Enabled { get; set; }
     }
 }

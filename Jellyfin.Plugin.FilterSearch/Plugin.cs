@@ -7,6 +7,7 @@ using Jellyfin.Plugin.FilterSearch.Configuration;
 using Jellyfin.Plugin.FilterSearch.Helpers;
 using MediaBrowser.Common.Configuration;
 using MediaBrowser.Common.Plugins;
+using MediaBrowser.Model.Drawing;
 using MediaBrowser.Model.Plugins;
 using MediaBrowser.Model.Serialization;
 using Microsoft.Extensions.Logging;
@@ -65,13 +66,6 @@ namespace Jellyfin.Plugin.FilterSearch
             if (!File.Exists(indexPath))
             {
                 _logger.LogError("Could not find index.html at path: {Path}", indexPath);
-                return;
-            }
-
-            if (!Configuration.Enabled)
-            {
-                _logger.LogInformation("Filter Search plugin is disabled. Removing script if present.");
-                RemoveScript();
                 return;
             }
 
@@ -164,5 +158,20 @@ namespace Jellyfin.Plugin.FilterSearch
                 }
             };
         }
+
+        /// <summary>
+        /// Gets the plugin thumb image.
+        /// </summary>
+        /// <returns>The thumb image stream.</returns>
+        public Stream? GetThumbImage()
+        {
+            var type = GetType();
+            return type.Assembly.GetManifestResourceStream(type.Namespace + ".icon.png");
+        }
+
+        /// <summary>
+        /// Gets the thumb image format.
+        /// </summary>
+        public ImageFormat ThumbImageFormat => ImageFormat.Png;
     }
 }

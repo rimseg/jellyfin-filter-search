@@ -7,8 +7,8 @@
     <TargetFramework Condition="'$(JellyfinVersion)' == '10.10.7'">net8.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
-    <AssemblyVersion>1.1.0.0</AssemblyVersion>
-    <FileVersion>1.1.0.0</FileVersion>
+    <AssemblyVersion>1.2.0.0</AssemblyVersion>
+    <FileVersion>1.2.0.0</FileVersion>
     <RootNamespace>Jellyfin.Plugin.FilterSearch</RootNamespace>
     <AssemblyName>Jellyfin.Plugin.FilterSearch</AssemblyName>
   </PropertyGroup>
@@ -35,6 +35,11 @@
   <ItemGroup>
     <None Remove="Configuration\configPage.html" />
     <EmbeddedResource Include="Configuration\configPage.html" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Remove="icon.png" />
+    <EmbeddedResource Include="icon.png" />
   </ItemGroup>
 
 </Project>

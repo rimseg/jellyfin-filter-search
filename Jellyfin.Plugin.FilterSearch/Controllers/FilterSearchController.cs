@@ -26,12 +26,6 @@ namespace Jellyfin.Plugin.FilterSearch.Controllers
         [ProducesResponseType(StatusCodes.Status503ServiceUnavailable)]
         public ActionResult GetScript()
         {
-            // Check if plugin is enabled
-            if (Plugin.Instance?.Configuration?.Enabled != true)
-            {
-                return StatusCode(StatusCodes.Status503ServiceUnavailable, "// Filter Search plugin is disabled");
-            }
-
             try
             {
                 var assembly = Assembly.GetExecutingAssembly();

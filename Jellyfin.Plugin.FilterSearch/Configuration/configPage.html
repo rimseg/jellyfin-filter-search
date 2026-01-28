@@ -11,127 +11,72 @@
     >
       <div data-role="content">
         <div class="content-primary">
-          <form id="FilterSearchConfigForm">
-            <div class="verticalSection verticalSection-extrabottompadding">
-              <div class="sectionTitleContainer flex align-items-center">
-                <h2 class="sectionTitle">Filter Search</h2>
-                <a
-                  is="emby-linkbutton"
-                  class="raised raised-mini emby-button"
-                  style="margin-left: 2em"
-                  target="_blank"
-                  href="https://github.com/rimseg/jellyfin-filter-search"
-                >
-                  <i class="md-icon button-icon button-icon-left secondaryText"></i>
-                  <span>Help</span>
-                </a>
-              </div>
-              <hr />
-              <br />
-
-              <div
-                style="
-                  background-color: rgba(255, 255, 255, 0.05);
-                  border-left: 4px solid #00a4dc;
-                  border-radius: 4px;
-                  padding: 1em 1.5em;
-                  margin: 1.5em 0;
-                  display: flex;
-                  align-items: center;
-                  gap: 1em;
-                "
+          <div class="verticalSection verticalSection-extrabottompadding">
+            <div class="sectionTitleContainer flex align-items-center">
+              <h2 class="sectionTitle">Filter Search</h2>
+              <a
+                is="emby-linkbutton"
+                class="raised raised-mini emby-button"
+                style="margin-left: 2em"
+                target="_blank"
+                href="https://github.com/rimseg/jellyfin-filter-search"
               >
-                <i class="material-icons" style="color: #00a4dc; font-size: 24px">info</i>
-                <div>
-                  <strong>Filter Search Plugin</strong><br />
-                  This plugin adds search functionality to filter dialogs (tags, genres, studios, etc.)
-                  and displays enabled/checked filters at the top of the list.<br /><br />
-                  <strong>Note:</strong> Changes require a Jellyfin server restart to take effect.
-                </div>
-              </div>
+                <i class="md-icon button-icon button-icon-left secondaryText"></i>
+                <span>Help</span>
+              </a>
+            </div>
+            <hr />
+            <br />
 
-              <div class="checkboxContainer checkboxContainer-withDescription">
-                <label class="emby-checkbox-label">
-                  <input is="emby-checkbox" type="checkbox" id="chkEnabled" />
-                  <span>Enable Filter Search</span>
-                </label>
-                <div class="fieldDescription">
-                  Enable or disable the filter search functionality.
-                </div>
-              </div>
-
-              <br />
-              <div
-                style="
-                  background-color: rgba(255, 255, 255, 0.05);
-                  border-left: 4px solid #52b54b;
-                  border-radius: 4px;
-                  padding: 1em 1.5em;
-                  margin: 1.5em 0;
-                "
-              >
-                <div>
-                  <strong>Features:</strong>
-                  <ul style="margin: 0.5em 0 0 1.5em; padding: 0;">
-                    <li>Search through filter options (tags, genres, studios, years, etc.)</li>
-                    <li>Selected/enabled filters are shown at the top</li>
-                    <li>Works with all Jellyfin filter dialogs</li>
-                    <li>Sticky search bar that stays visible while scrolling</li>
-                  </ul>
-                </div>
-              </div>
-
-              <br />
+            <div
+              style="
+                background-color: rgba(255, 255, 255, 0.05);
+                border-left: 4px solid #00a4dc;
+                border-radius: 4px;
+                padding: 1em 1.5em;
+                margin: 1.5em 0;
+                display: flex;
+                align-items: center;
+                gap: 1em;
+              "
+            >
+              <i class="material-icons" style="color: #00a4dc; font-size: 24px">info</i>
               <div>
-                <button is="emby-button" type="submit" class="raised button-submit block">
-                  <span>Save</span>
-                </button>
+                <strong>Filter Search Plugin</strong><br />
+                This plugin adds search functionality to filter dialogs (tags, genres, studios, etc.)
+                and displays enabled/checked filters at the top of the list.<br /><br />
+                <strong>Tip:</strong> To disable this plugin, use the Jellyfin plugin management page
+                (Dashboard → Plugins → My Plugins → Filter Search → Disable).
               </div>
             </div>
-          </form>
+
+            <div
+              style="
+                background-color: rgba(255, 255, 255, 0.05);
+                border-left: 4px solid #52b54b;
+                border-radius: 4px;
+                padding: 1em 1.5em;
+                margin: 1.5em 0;
+              "
+            >
+              <div>
+                <strong>Features:</strong>
+                <ul style="margin: 0.5em 0 0 1.5em; padding: 0;">
+                  <li>Search through filter options (tags, genres, studios, years, etc.)</li>
+                  <li>Selected/enabled filters are shown at the top</li>
+                  <li>Works with all Jellyfin filter dialogs</li>
+                  <li>Sticky search bar that stays visible while scrolling</li>
+                </ul>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </div>
 
     <script type="text/javascript">
-      var FilterSearchConfig = {
-        pluginUniqueId: "b8f7e2c1-9a3d-4f5e-8b6c-1d2e3f4a5b6c",
-      };
-
-      document
-        .querySelector("#FilterSearchConfigPage")
-        .addEventListener("pageshow", function () {
-          Dashboard.showLoadingMsg();
-
-          ApiClient.getPluginConfiguration(FilterSearchConfig.pluginUniqueId).then(
-            function (config) {
-              document.querySelector("#chkEnabled").checked = config.Enabled;
-              Dashboard.hideLoadingMsg();
-            }
-          );
-        });
-
-      document
-        .querySelector("#FilterSearchConfigForm")
-        .addEventListener("submit", function (e) {
-          e.preventDefault();
-          Dashboard.showLoadingMsg();
-
-          ApiClient.getPluginConfiguration(FilterSearchConfig.pluginUniqueId).then(
-            function (config) {
-              config.Enabled = document.querySelector("#chkEnabled").checked;
-
-              ApiClient.updatePluginConfiguration(
-                FilterSearchConfig.pluginUniqueId,
-                config
-              ).then(function (result) {
-                Dashboard.processPluginConfigurationUpdateResult(result);
-              });
-            }
-          );
-
-          return false;
-        });
+      // Filter Search Configuration Page
+      // This plugin is enabled/disabled via Jellyfin's built-in plugin management
     </script>
   </body>
 </html>

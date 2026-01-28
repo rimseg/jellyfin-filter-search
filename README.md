@@ -109,8 +109,11 @@ Edit the `JellyfinVersion` property in `Jellyfin.Plugin.FilterSearch.csproj`:
 
 ## Notes
 
-- The search bar only appears in sections with 5+ items
 - Works with Jellyfin 10.10.x and later
+
+## Credits
+
+- [Jellyfin-Javascript-Injector](https://github.com/n00bcodr/Jellyfin-JavaScript-Injector/)
 
 ## License
 
