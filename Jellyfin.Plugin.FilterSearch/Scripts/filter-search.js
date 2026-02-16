@@ -255,30 +255,68 @@
         selectNoneBtn.className = 'filter-action-btn';
         selectNoneBtn.textContent = 'None';
 
-        function setAll(checked) {
+        var isProcessing = false;
+
+        function setAll(checked, btn) {
+            if (isProcessing) return;
+            
             var items = getFilterItems(checkboxList);
-            var changedCheckboxes = [];
+            var checkboxesToChange = [];
+            
+            // Collect all checkboxes that need to change
             items.forEach(function(item) {
                 if (item.classList.contains('filter-item-hidden')) return;
                 var cb = item.querySelector('input[type="checkbox"]');
                 if (cb && cb.checked !== checked) {
-                    changedCheckboxes.push({ checkbox: cb, label: item });
+                    checkboxesToChange.push(cb);
                 }
             });
-            // Use click() to properly trigger Jellyfin's event handlers
-            changedCheckboxes.forEach(function(item) {
-                // Click triggers the full event chain that Jellyfin listens to
-                item.checkbox.click();
-            });
-            setTimeout(function() {
+            
+            if (checkboxesToChange.length === 0) return;
+            
+            // Disable buttons and show progress
+            isProcessing = true;
+            var originalText = btn.textContent;
+            selectAllBtn.disabled = true;
+            selectNoneBtn.disabled = true;
+            selectAllBtn.style.opacity = '0.5';
+            selectNoneBtn.style.opacity = '0.5';
+            
+            var total = checkboxesToChange.length;
+            var index = 0;
+            
+            function updateProgress() {
+                btn.textContent = originalText + ' (' + index + '/' + total + ')';
+            }
+            
+            function finishProcessing() {
+                isProcessing = false;
+                selectAllBtn.disabled = false;
+                selectNoneBtn.disabled = false;
+                selectAllBtn.style.opacity = '1';
+                selectNoneBtn.style.opacity = '1';
+                btn.textContent = originalText;
+                
                 var currentItems = getFilterItems(checkboxList);
                 sortEnabledToTop(currentItems, checkboxList);
                 if (searchInput) filterItems(currentItems, searchInput.value, checkboxList);
-            }, 50);
+            }
+            
+            // Click checkboxes one at a time with delay to avoid overwhelming the server
+            var clickInterval = setInterval(function() {
+                if (index >= checkboxesToChange.length) {
+                    clearInterval(clickInterval);
+                    setTimeout(finishProcessing, 150);
+                    return;
+                }
+                checkboxesToChange[index].click();
+                index++;
+                updateProgress();
+            }, 80); // 80ms delay between each click for server stability
         }
 
-        selectAllBtn.addEventListener('click', function() { setAll(true); });
-        selectNoneBtn.addEventListener('click', function() { setAll(false); });
+        selectAllBtn.addEventListener('click', function() { setAll(true, selectAllBtn); });
+        selectNoneBtn.addEventListener('click', function() { setAll(false, selectNoneBtn); });
 
         wrapper.appendChild(selectAllBtn);
         wrapper.appendChild(selectNoneBtn);
@@ -351,6 +389,30 @@
                 });
             }
         });
+        
+        // Watch for dialog close and capture filters
+        var dialogObserver = new MutationObserver(function(mutations) {
+            mutations.forEach(function(mutation) {
+                mutation.removedNodes.forEach(function(node) {
+                    if (node === dialog || (node.contains && node.contains(dialog))) {
+                        // Dialog is being removed, capture filters first
+                        captureFiltersFromDialog(dialog);
+                        setTimeout(updateActiveFiltersBar, 300);
+                        dialogObserver.disconnect();
+                    }
+                });
+            });
+        });
+        if (dialog.parentElement) {
+            dialogObserver.observe(dialog.parentElement, { childList: true });
+        }
+        
+        // Also capture filters on any checkbox change in the dialog
+        dialog.addEventListener('change', function(e) {
+            if (e.target.type === 'checkbox') {
+                captureFiltersFromDialog(dialog);
+            }
+        });
     }
 
     function setupObserver() {
@@ -380,17 +442,61 @@
     // Active filter bar functionality
     const ACTIVE_FILTERS_BAR_ID = PLUGIN_ID + '-active-filters';
     let activeFiltersData = {};
+    let cachedActiveFilters = {}; // Store filters when dialog closes
 
     function parseUrlFilters() {
-        const params = new URLSearchParams(window.location.search);
+        // Check both URL search params and hash params (Jellyfin uses different methods)
+        const searchParams = new URLSearchParams(window.location.search);
+        const hashParams = new URLSearchParams(window.location.hash.replace('#', '').replace(/^.*\?/, ''));
+        
         const filters = {};
-        const filterParams = ['Genres', 'Tags', 'Studios', 'OfficialRatings', 'Years', 'VideoTypes'];
+        const filterParams = ['Genres', 'Tags', 'Studios', 'OfficialRatings', 'Years', 'VideoTypes', 'genres', 'tags', 'studios'];
+        
         filterParams.forEach(function(param) {
-            const value = params.get(param);
+            // Check search params first, then hash params
+            let value = searchParams.get(param) || hashParams.get(param);
             if (value) {
-                filters[param] = value.split(',').map(function(v) { return decodeURIComponent(v); });
+                const normalizedParam = param.charAt(0).toUpperCase() + param.slice(1);
+                filters[normalizedParam] = value.split(',').map(function(v) { return decodeURIComponent(v); });
             }
         });
+        return filters;
+    }
+
+    // Capture active filters from the filter dialog
+    function captureFiltersFromDialog(dialog) {
+        var filters = {};
+        var collapseSections = dialog.querySelectorAll('[is="emby-collapse"], .emby-collapse');
+        
+        collapseSections.forEach(function(section) {
+            var titleEl = section.querySelector('.emby-collapsible-title, h3');
+            var title = section.getAttribute('title') || (titleEl ? titleEl.textContent.trim() : 'Unknown');
+            
+            var content = section.querySelector('.collapseContent, .filterOptions');
+            if (!content) return;
+            
+            var checkboxList = content.querySelector('.checkboxList');
+            if (!checkboxList) return;
+            
+            var items = getFilterItems(checkboxList);
+            var selectedValues = [];
+            
+            items.forEach(function(item) {
+                var cb = item.querySelector('input[type="checkbox"]');
+                if (cb && cb.checked) {
+                    var text = getItemText(item);
+                    // Capitalize first letter
+                    text = text.charAt(0).toUpperCase() + text.slice(1);
+                    selectedValues.push(text);
+                }
+            });
+            
+            if (selectedValues.length > 0) {
+                filters[title] = selectedValues;
+            }
+        });
+        
+        cachedActiveFilters = filters;
         return filters;
     }
 
@@ -405,29 +511,55 @@
     }
 
     function updateActiveFiltersBar() {
-        const filters = parseUrlFilters();
-        let bar = document.getElementById(ACTIVE_FILTERS_BAR_ID);
+        // First try URL params, then fall back to cached filters from dialog
+        var filters = parseUrlFilters();
         
-        const hasFilters = Object.keys(filters).some(function(key) {
+        // If no URL filters, use cached filters
+        if (Object.keys(filters).length === 0) {
+            filters = cachedActiveFilters;
+        }
+        
+        var bar = document.getElementById(ACTIVE_FILTERS_BAR_ID);
+        
+        var hasFilters = Object.keys(filters).some(function(key) {
             return filters[key] && filters[key].length > 0;
         });
 
-        if (!hasFilters) {
+        // Also check if the filter indicator is visible (Jellyfin shows ! when filters active)
+        var filterIndicator = document.querySelector('.filterIndicator:not(.hide)');
+        var hasIndicator = filterIndicator && !filterIndicator.classList.contains('hide');
+
+        if (!hasFilters && !hasIndicator) {
             if (bar) bar.classList.add('hidden');
             return;
         }
 
-        // Find the appropriate container to insert the bar
-        const itemsContainer = document.querySelector('.itemsContainer, .view-content, [data-type="itemsContainer"]');
-        if (!itemsContainer) return;
+        // Find the appropriate container - look for the toolbar area
+        var toolbar = document.querySelector('.flex.align-items-center.justify-content-center.flex-wrap-wrap.padded-top');
+        if (!toolbar) {
+            toolbar = document.querySelector('.btnFilter-wrapper');
+            if (toolbar) toolbar = toolbar.closest('.flex');
+        }
+        if (!toolbar) {
+            toolbar = document.querySelector('.itemsContainer');
+        }
+        
+        if (!toolbar) {
+            console.log('[' + PLUGIN_ID + '] Could not find container for active filters bar');
+            return;
+        }
 
         if (!bar) {
             bar = createActiveFiltersBar();
         }
 
-        // Insert bar before items container if not already there
-        if (!bar.parentElement || bar.parentElement !== itemsContainer.parentElement) {
-            itemsContainer.parentElement.insertBefore(bar, itemsContainer);
+        // Insert bar after the toolbar
+        if (!bar.parentElement) {
+            if (toolbar.nextSibling) {
+                toolbar.parentElement.insertBefore(bar, toolbar.nextSibling);
+            } else {
+                toolbar.parentElement.appendChild(bar);
+            }
         }
 
         // Build the bar content
@@ -483,32 +615,95 @@
     }
 
     function removeFilter(category, value) {
-        const params = new URLSearchParams(window.location.search);
-        const currentValues = params.get(category);
-        if (currentValues) {
-            const values = currentValues.split(',').filter(function(v) {
-                return decodeURIComponent(v) !== value;
-            });
-            if (values.length > 0) {
-                params.set(category, values.join(','));
-            } else {
-                params.delete(category);
-            }
-            const newUrl = window.location.pathname + '?' + params.toString();
-            window.history.pushState({}, '', newUrl);
-            window.location.reload();
+        // Open filter dialog and uncheck the specific filter
+        var filterBtn = document.querySelector('.btnFilter');
+        if (filterBtn) {
+            filterBtn.click();
+            setTimeout(function() {
+                var dialog = document.querySelector('.filterDialog');
+                if (dialog) {
+                    var collapseSections = dialog.querySelectorAll('[is="emby-collapse"], .emby-collapse');
+                    collapseSections.forEach(function(section) {
+                        var titleEl = section.querySelector('.emby-collapsible-title, h3');
+                        var title = section.getAttribute('title') || (titleEl ? titleEl.textContent.trim() : '');
+                        
+                        if (title.toLowerCase() === category.toLowerCase() || 
+                            title.toLowerCase().includes(category.toLowerCase())) {
+                            // Expand this section
+                            var btn = section.querySelector('.emby-collapsible-button, button');
+                            var content = section.querySelector('.collapseContent');
+                            if (content && !content.classList.contains('expanded') && btn) {
+                                btn.click();
+                            }
+                            setTimeout(function() {
+                                var checkboxList = section.querySelector('.checkboxList');
+                                if (checkboxList) {
+                                    var items = getFilterItems(checkboxList);
+                                    items.forEach(function(item) {
+                                        var text = getItemText(item);
+                                        if (text === value.toLowerCase()) {
+                                            var cb = item.querySelector('input[type="checkbox"]');
+                                            if (cb && cb.checked) {
+                                                cb.click();
+                                            }
+                                        }
+                                    });
+                                }
+                                // Close dialog
+                                setTimeout(function() {
+                                    var closeBtn = dialog.querySelector('.btnCancel, .dialogCloseButton, [data-action="close"]');
+                                    if (closeBtn) closeBtn.click();
+                                }, 100);
+                            }, 200);
+                        }
+                    });
+                }
+            }, 300);
         }
     }
 
     function clearAllFilters() {
-        const params = new URLSearchParams(window.location.search);
-        const filterParams = ['Genres', 'Tags', 'Studios', 'OfficialRatings', 'Years', 'VideoTypes'];
-        filterParams.forEach(function(param) {
-            params.delete(param);
-        });
-        const newUrl = window.location.pathname + (params.toString() ? '?' + params.toString() : '');
-        window.history.pushState({}, '', newUrl);
-        window.location.reload();
+        // Click the filter button to open the dialog
+        var filterBtn = document.querySelector('.btnFilter');
+        if (filterBtn) {
+            filterBtn.click();
+            setTimeout(function() {
+                var dialog = document.querySelector('.filterDialog');
+                if (dialog) {
+                    // Find all checked checkboxes and uncheck them
+                    var allCheckboxes = dialog.querySelectorAll('input[type="checkbox"]:checked');
+                    var index = 0;
+                    
+                    function uncheckNext() {
+                        if (index >= allCheckboxes.length) {
+                            // All done, close the dialog
+                            cachedActiveFilters = {};
+                            setTimeout(function() {
+                                var closeBtn = dialog.querySelector('.btnCancel, .dialogCloseButton, [data-action="close"]');
+                                if (closeBtn) closeBtn.click();
+                                setTimeout(updateActiveFiltersBar, 300);
+                            }, 100);
+                            return;
+                        }
+                        allCheckboxes[index].click();
+                        index++;
+                        setTimeout(uncheckNext, 80);
+                    }
+                    
+                    uncheckNext();
+                }
+            }, 300);
+        } else {
+            // Fallback to URL manipulation
+            var params = new URLSearchParams(window.location.search);
+            var filterParams = ['Genres', 'Tags', 'Studios', 'OfficialRatings', 'Years', 'VideoTypes'];
+            filterParams.forEach(function(param) {
+                params.delete(param);
+            });
+            var newUrl = window.location.pathname + (params.toString() ? '?' + params.toString() : '');
+            window.history.pushState({}, '', newUrl);
+            window.location.reload();
+        }
     }
 
     function setupPageObserver() {
