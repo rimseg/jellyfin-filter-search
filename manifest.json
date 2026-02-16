@@ -9,19 +9,19 @@
     "imageUrl": "https://raw.githubusercontent.com/rimseg/jellyfin-filter-search/main/icon.png",
     "versions": [
       {
-        "changelog": "For Jellyfin 10.11.x\n- Complete rewrite of active filters bar\n- Removed unreliable URL parsing and fetch interception\n- × and Clear All now use polling (same proven pattern as Select All/None)\n- Filter bar populates from dialog interaction, shows hint when filters detected",
+        "changelog": "For Jellyfin 10.11.x\n- Removed active filters bar from movies page\n- Search, Select All/None, and sort-enabled-to-top in filter dialog remain",
         "targetAbi": "10.11.0.0",
-        "version": "1.6.0.6",
-        "sourceUrl": "https://github.com/rimseg/jellyfin-filter-search/releases/download/1.6.0.6/Jellyfin.Plugin.FilterSearch_10.11.0.zip",
-        "checksum": "c6c1d9e5392fa6867c03837a11059462",
+        "version": "1.7.0.0",
+        "sourceUrl": "https://github.com/rimseg/jellyfin-filter-search/releases/download/1.7.0.0/Jellyfin.Plugin.FilterSearch_10.11.0.zip",
+        "checksum": "618e0ef1a85ef0debb4860b30f55cb88",
         "timestamp": "2026-02-16T00:00:00"
       },
       {
-        "changelog": "For Jellyfin 10.10.x\n- Complete rewrite of active filters bar\n- Removed unreliable URL parsing and fetch interception\n- × and Clear All now use polling (same proven pattern as Select All/None)\n- Filter bar populates from dialog interaction, shows hint when filters detected",
+        "changelog": "For Jellyfin 10.10.x\n- Removed active filters bar from movies page\n- Search, Select All/None, and sort-enabled-to-top in filter dialog remain",
         "targetAbi": "10.10.7.0",
-        "version": "1.6.0.6",
-        "sourceUrl": "https://github.com/rimseg/jellyfin-filter-search/releases/download/1.6.0.6/Jellyfin.Plugin.FilterSearch_10.10.7.zip",
-        "checksum": "e583f77e545562d82c1b46569b8df6e2",
+        "version": "1.7.0.0",
+        "sourceUrl": "https://github.com/rimseg/jellyfin-filter-search/releases/download/1.7.0.0/Jellyfin.Plugin.FilterSearch_10.10.7.zip",
+        "checksum": "000f4d9fedb1a78056ad7a3873e34c4d",
         "timestamp": "2026-02-16T00:00:00"
       }
     ]
