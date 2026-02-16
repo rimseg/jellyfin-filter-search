@@ -635,6 +635,31 @@
         document.body.classList.remove('filter-dialog-hidden');
     }
 
+    function waitForDialogClose(callback) {
+        // Wait until the filterDialog is fully removed from the DOM before un-hiding
+        var checkInterval = setInterval(function() {
+            if (!document.querySelector('.filterDialog')) {
+                clearInterval(checkInterval);
+                showDialogAfterOperation();
+                if (callback) callback();
+            }
+        }, 50);
+        // Safety timeout: force un-hide after 3 seconds
+        setTimeout(function() {
+            clearInterval(checkInterval);
+            showDialogAfterOperation();
+            if (callback) callback();
+        }, 3000);
+    }
+
+    function closeDialogAndWait(dialog, callback) {
+        var closeBtn = dialog.querySelector('.btnCancel, .dialogCloseButton, [data-action="close"]');
+        if (closeBtn) {
+            closeBtn.click();
+        }
+        waitForDialogClose(callback);
+    }
+
     function removeFilter(category, value) {
         // Open filter dialog invisibly and uncheck the specific filter
         var filterBtn = document.querySelector('.btnFilter');
@@ -671,12 +696,8 @@
                                         }
                                     });
                                 }
-                                // Close dialog
-                                setTimeout(function() {
-                                    var closeBtn = dialog.querySelector('.btnCancel, .dialogCloseButton, [data-action="close"]');
-                                    if (closeBtn) closeBtn.click();
-                                    setTimeout(showDialogAfterOperation, 100);
-                                }, 100);
+                                // Close dialog and wait for it to disappear
+                                closeDialogAndWait(dialog);
                             }, 200);
                         }
                     });
@@ -702,16 +723,9 @@
                     
                     function uncheckNext() {
                         if (index >= allCheckboxes.length) {
-                            // All done, close the dialog
+                            // All done, close the dialog and wait for it to disappear
                             cachedActiveFilters = {};
-                            setTimeout(function() {
-                                var closeBtn = dialog.querySelector('.btnCancel, .dialogCloseButton, [data-action="close"]');
-                                if (closeBtn) closeBtn.click();
-                                setTimeout(function() {
-                                    showDialogAfterOperation();
-                                    updateActiveFiltersBar();
-                                }, 200);
-                            }, 100);
+                            closeDialogAndWait(dialog, updateActiveFiltersBar);
                             return;
                         }
                         allCheckboxes[index].click();
