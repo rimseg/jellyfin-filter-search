@@ -148,18 +148,50 @@
             background: rgba(255, 107, 107, 0.3);
             border-color: rgba(255, 107, 107, 0.6);
         }
-        .filter-dialog-hidden .dialogContainer,
-        .filter-dialog-hidden .dialog,
-        .filter-dialog-hidden .filterDialog,
-        .filter-dialog-hidden .dialogBackdrop,
-        .filter-dialog-hidden .dialogBackdropOpened,
-        body.filter-dialog-hidden > .dialogContainer,
-        body.filter-dialog-hidden > .dialogBackdrop {
-            opacity: 0 !important;
-            transition: none !important;
-            animation: none !important;
-        }
     `;
+
+    // Intercept fetch to capture filter params from Jellyfin API calls
+    function setupFetchInterceptor() {
+        if (window._filterSearchFetchIntercepted) return;
+        window._filterSearchFetchIntercepted = true;
+
+        var filterParamNames = ['Genres', 'Tags', 'Studios', 'OfficialRatings', 'Years', 'VideoTypes'];
+        var originalFetch = window.fetch;
+        window.fetch = function(input, init) {
+            try {
+                var url = (typeof input === 'string') ? input : (input && input.url ? input.url : '');
+                // Match Items endpoint calls that Jellyfin makes for library pages
+                if (url && /\/Items(?:\?|$)/.test(url)) {
+                    var apiUrl;
+                    try {
+                        apiUrl = new URL(url, window.location.origin);
+                    } catch(e) { /* ignore malformed URLs */ }
+                    
+                    if (apiUrl) {
+                        var apiParams = apiUrl.searchParams;
+                        var filters = {};
+                        
+                        filterParamNames.forEach(function(param) {
+                            var value = apiParams.get(param);
+                            if (value) {
+                                // Jellyfin uses | or , as separator depending on version
+                                var sep = value.indexOf('|') >= 0 ? '|' : ',';
+                                filters[param] = value.split(sep).map(function(v) { return decodeURIComponent(v).trim(); });
+                            }
+                        });
+                        
+                        if (Object.keys(filters).length > 0) {
+                            cachedActiveFilters = filters;
+                            setTimeout(updateActiveFiltersBar, 200);
+                        }
+                    }
+                }
+            } catch(e) {
+                console.warn('[' + PLUGIN_ID + '] Error in fetch interceptor:', e);
+            }
+            return originalFetch.apply(this, arguments);
+        };
+    }
 
     function injectStyles() {
         if (document.getElementById(PLUGIN_ID + '-styles')) return;
@@ -625,145 +657,242 @@
         bar.appendChild(clearAllBtn);
     }
 
-    function hideDialogDuringOperation() {
-        document.body.classList.add('filter-dialog-hidden');
-    }
-
-    function showDialogAfterOperation() {
-        document.body.classList.remove('filter-dialog-hidden');
-    }
-
-    function waitForDialogClose(callback) {
-        // Wait until the filterDialog is fully removed from the DOM before un-hiding
-        var done = false;
-        function finish() {
-            if (done) return;
-            done = true;
-            clearInterval(checkInterval);
-            showDialogAfterOperation();
-            if (callback) callback();
+    function getUrlParts() {
+        // Jellyfin can use either search params or hash-based routing
+        var hash = window.location.hash || '';
+        var hashBase = hash.split('?')[0];
+        var hashQuery = hash.indexOf('?') >= 0 ? hash.split('?')[1] : '';
+        var searchQuery = window.location.search.replace('?', '');
+        
+        // Determine which style is in use
+        if (hashQuery) {
+            return { mode: 'hash', base: hashBase, params: new URLSearchParams(hashQuery) };
+        } else {
+            return { mode: 'search', base: window.location.pathname, params: new URLSearchParams(searchQuery) };
         }
-        var checkInterval = setInterval(function() {
-            if (!document.querySelector('.filterDialog')) {
-                finish();
+    }
+
+    function applyUrlParams(urlParts) {
+        var paramStr = urlParts.params.toString();
+        if (urlParts.mode === 'hash') {
+            var newHash = urlParts.base + (paramStr ? '?' + paramStr : '');
+            window.location.hash = newHash;
+        } else {
+            var newUrl = urlParts.base + (paramStr ? '?' + paramStr : '');
+            window.history.pushState({}, '', newUrl);
+        }
+        // Clear cached filters and reload the page to apply changes
+        cachedActiveFilters = {};
+        window.location.reload();
+    }
+
+    function uncheckFilterInDialog(dialog, category, value) {
+        var collapseSections = dialog.querySelectorAll('[is="emby-collapse"], .emby-collapse');
+        collapseSections.forEach(function(section) {
+            var titleEl = section.querySelector('.emby-collapsible-title, h3');
+            var sectionTitle = section.getAttribute('title') || (titleEl ? titleEl.textContent.trim() : '');
+            
+            // Match section title to category (e.g. "Genres" matches "Genre" section)
+            if (sectionTitle.toLowerCase().replace(/s$/, '') !== category.toLowerCase().replace(/s$/, '') &&
+                sectionTitle.toLowerCase() !== category.toLowerCase()) {
+                return;
             }
-        }, 50);
-        // Safety timeout: force un-hide after 3 seconds
-        setTimeout(finish, 3000);
+            
+            // Expand section if collapsed
+            var button = section.querySelector('.emby-collapsible-button, button');
+            var content = section.querySelector('.collapseContent, .filterOptions');
+            if (content && !content.classList.contains('expanded')) {
+                if (button) button.click();
+            }
+            
+            setTimeout(function() {
+                var checkboxList = (content || section).querySelector('.checkboxList');
+                if (!checkboxList) return;
+                
+                var items = getFilterItems(checkboxList);
+                items.forEach(function(item) {
+                    var cb = item.querySelector('input[type="checkbox"]');
+                    if (!cb || !cb.checked) return;
+                    var text = getItemText(item);
+                    if (text === value.toLowerCase()) {
+                        cb.click();
+                    }
+                });
+                
+                // Close the dialog after a short delay
+                setTimeout(function() {
+                    var closeBtn = dialog.querySelector('.btnCloseDialog, .btnCancel, button[title="Close"]');
+                    if (closeBtn) {
+                        closeBtn.click();
+                    } else {
+                        // Try clicking outside / pressing escape
+                        var overlay = document.querySelector('.dialogBackdrop, .dialogContainer');
+                        if (overlay) overlay.click();
+                    }
+                }, 200);
+            }, 200);
+        });
     }
 
-    function closeDialogAndWait(dialog, callback) {
-        var closeBtn = dialog.querySelector('.btnCancel, .dialogCloseButton, [data-action="close"]');
-        if (closeBtn) {
-            closeBtn.click();
-        }
-        waitForDialogClose(callback);
+    function uncheckAllFiltersInDialog(dialog) {
+        var collapseSections = dialog.querySelectorAll('[is="emby-collapse"], .emby-collapse');
+        var sectionsToProcess = [];
+        
+        collapseSections.forEach(function(section) {
+            var button = section.querySelector('.emby-collapsible-button, button');
+            var content = section.querySelector('.collapseContent, .filterOptions');
+            if (content && !content.classList.contains('expanded')) {
+                if (button) button.click();
+            }
+            sectionsToProcess.push(content || section);
+        });
+        
+        setTimeout(function() {
+            sectionsToProcess.forEach(function(content) {
+                var checkboxList = content.querySelector('.checkboxList');
+                if (!checkboxList) return;
+                
+                var items = getFilterItems(checkboxList);
+                items.forEach(function(item) {
+                    var cb = item.querySelector('input[type="checkbox"]');
+                    if (cb && cb.checked) {
+                        cb.click();
+                    }
+                });
+            });
+            
+            // Close the dialog after unchecking
+            setTimeout(function() {
+                var closeBtn = dialog.querySelector('.btnCloseDialog, .btnCancel, button[title="Close"]');
+                if (closeBtn) {
+                    closeBtn.click();
+                } else {
+                    var overlay = document.querySelector('.dialogBackdrop, .dialogContainer');
+                    if (overlay) overlay.click();
+                }
+            }, 200);
+        }, 300);
     }
 
     function removeFilter(category, value) {
-        // Open filter dialog invisibly and uncheck the specific filter
-        var filterBtn = document.querySelector('.btnFilter');
-        if (filterBtn) {
-            hideDialogDuringOperation();
-            filterBtn.click();
-            
-            // Wait for dialog to appear in DOM
-            var attempts = 0;
-            var waitForDialog = setInterval(function() {
-                var dialog = document.querySelector('.filterDialog');
-                attempts++;
-                if (!dialog && attempts < 20) return; // keep waiting up to 1 second
-                clearInterval(waitForDialog);
-                
-                if (!dialog) {
-                    showDialogAfterOperation();
-                    return;
+        var urlParts = getUrlParts();
+        var params = urlParts.params;
+        
+        // Try both cases of the category name
+        var paramName = null;
+        var filterParamNames = ['Genres', 'Tags', 'Studios', 'OfficialRatings', 'Years', 'VideoTypes', 'genres', 'tags', 'studios'];
+        filterParamNames.forEach(function(name) {
+            if (name.toLowerCase() === category.toLowerCase()) {
+                if (params.has(name)) paramName = name;
+            }
+        });
+        
+        if (!paramName) {
+            // Filter not found in URL - use dialog approach
+            // Remove from cache immediately for visual feedback
+            if (cachedActiveFilters[category]) {
+                cachedActiveFilters[category] = cachedActiveFilters[category].filter(function(v) {
+                    return v.toLowerCase() !== value.toLowerCase();
+                });
+                if (cachedActiveFilters[category].length === 0) {
+                    delete cachedActiveFilters[category];
                 }
-                
-                var collapseSections = dialog.querySelectorAll('[is="emby-collapse"], .emby-collapse');
-                collapseSections.forEach(function(section) {
-                    var titleEl = section.querySelector('.emby-collapsible-title, h3');
-                    var title = section.getAttribute('title') || (titleEl ? titleEl.textContent.trim() : '');
-                    
-                    if (title.toLowerCase() === category.toLowerCase() || 
-                        title.toLowerCase().includes(category.toLowerCase())) {
-                        // Expand this section
-                        var btn = section.querySelector('.emby-collapsible-button, button');
-                        var content = section.querySelector('.collapseContent');
-                        if (content && !content.classList.contains('expanded') && btn) {
-                            btn.click();
+            }
+            updateActiveFiltersBar();
+            
+            // Open filter dialog to actually uncheck the filter
+            var filterBtn = document.querySelector('.btnFilter, .filterButton, button[title="Filter"]');
+            if (!filterBtn) {
+                filterBtn = document.querySelector('button .md-icon, button .material-icons');
+                if (filterBtn) {
+                    // Find parent buttons with filter_list icon
+                    var allBtns = document.querySelectorAll('button');
+                    for (var bi = 0; bi < allBtns.length; bi++) {
+                        var icon = allBtns[bi].querySelector('.md-icon, .material-icons');
+                        if (icon && icon.textContent.trim() === 'filter_list') {
+                            filterBtn = allBtns[bi];
+                            break;
                         }
+                    }
+                }
+            }
+            if (filterBtn) {
+                filterBtn.click();
+                // Wait for dialog to appear, then uncheck the filter
+                var dialogWatcher = new MutationObserver(function(mutations) {
+                    var dialog = document.querySelector('.filterDialog');
+                    if (dialog) {
+                        dialogWatcher.disconnect();
                         setTimeout(function() {
-                            var checkboxList = section.querySelector('.checkboxList');
-                            if (checkboxList) {
-                                var items = getFilterItems(checkboxList);
-                                items.forEach(function(item) {
-                                    var text = getItemText(item);
-                                    if (text === value.toLowerCase()) {
-                                        var cb = item.querySelector('input[type="checkbox"]');
-                                        if (cb && cb.checked) {
-                                            cb.click();
-                                        }
-                                    }
-                                });
-                            }
-                            // Close dialog and wait for it to disappear
-                            closeDialogAndWait(dialog);
+                            uncheckFilterInDialog(dialog, category, value);
                         }, 300);
                     }
                 });
-            }, 50);
+                dialogWatcher.observe(document.body, { childList: true, subtree: true });
+                // Timeout safety: stop watching after 3s
+                setTimeout(function() { dialogWatcher.disconnect(); }, 3000);
+            }
+            return;
         }
+        
+        var currentValues = params.get(paramName).split(',').map(function(v) { return decodeURIComponent(v); });
+        var newValues = currentValues.filter(function(v) { 
+            return v.toLowerCase() !== value.toLowerCase(); 
+        });
+        
+        if (newValues.length > 0) {
+            params.set(paramName, newValues.join(','));
+        } else {
+            params.delete(paramName);
+        }
+        
+        applyUrlParams(urlParts);
     }
 
     function clearAllFilters() {
-        // Click the filter button to open the dialog invisibly
-        var filterBtn = document.querySelector('.btnFilter');
+        var urlParts = getUrlParts();
+        var params = urlParts.params;
+        var filterParamNames = ['Genres', 'Tags', 'Studios', 'OfficialRatings', 'Years', 'VideoTypes', 'genres', 'tags', 'studios'];
+        
+        var hadUrlFilters = false;
+        filterParamNames.forEach(function(name) {
+            if (params.has(name)) hadUrlFilters = true;
+            params.delete(name);
+        });
+        
+        if (hadUrlFilters) {
+            applyUrlParams(urlParts);
+            return;
+        }
+        
+        // Filters not in URL - use dialog approach
+        cachedActiveFilters = {};
+        updateActiveFiltersBar();
+        
+        var filterBtn = document.querySelector('.btnFilter, .filterButton, button[title="Filter"]');
+        if (!filterBtn) {
+            var allBtns = document.querySelectorAll('button');
+            for (var bi = 0; bi < allBtns.length; bi++) {
+                var icon = allBtns[bi].querySelector('.md-icon, .material-icons');
+                if (icon && icon.textContent.trim() === 'filter_list') {
+                    filterBtn = allBtns[bi];
+                    break;
+                }
+            }
+        }
         if (filterBtn) {
-            hideDialogDuringOperation();
             filterBtn.click();
-            
-            // Wait for dialog to appear in DOM
-            var attempts = 0;
-            var waitForDialog = setInterval(function() {
+            var dialogWatcher = new MutationObserver(function(mutations) {
                 var dialog = document.querySelector('.filterDialog');
-                attempts++;
-                if (!dialog && attempts < 20) return; // keep waiting up to 1 second
-                clearInterval(waitForDialog);
-                
-                if (!dialog) {
-                    showDialogAfterOperation();
-                    return;
+                if (dialog) {
+                    dialogWatcher.disconnect();
+                    setTimeout(function() {
+                        uncheckAllFiltersInDialog(dialog);
+                    }, 300);
                 }
-                
-                // Find all checked checkboxes and uncheck them
-                var allCheckboxes = dialog.querySelectorAll('input[type="checkbox"]:checked');
-                var index = 0;
-                
-                function uncheckNext() {
-                    if (index >= allCheckboxes.length) {
-                        // All done, close the dialog and wait for it to disappear
-                        cachedActiveFilters = {};
-                        closeDialogAndWait(dialog, updateActiveFiltersBar);
-                        return;
-                    }
-                    allCheckboxes[index].click();
-                    index++;
-                    setTimeout(uncheckNext, 80);
-                }
-                
-                uncheckNext();
-            }, 50);
-        } else {
-            // Fallback to URL manipulation
-            var params = new URLSearchParams(window.location.search);
-            var filterParams = ['Genres', 'Tags', 'Studios', 'OfficialRatings', 'Years', 'VideoTypes'];
-            filterParams.forEach(function(param) {
-                params.delete(param);
             });
-            var newUrl = window.location.pathname + (params.toString() ? '?' + params.toString() : '');
-            window.history.pushState({}, '', newUrl);
-            window.location.reload();
+            dialogWatcher.observe(document.body, { childList: true, subtree: true });
+            setTimeout(function() { dialogWatcher.disconnect(); }, 3000);
         }
     }
 
@@ -787,6 +916,7 @@
 
     function init() {
         console.log('[' + PLUGIN_ID + '] Initializing Filter Search Plugin');
+        setupFetchInterceptor();
         injectStyles();
         setupObserver();
         setupPageObserver();
