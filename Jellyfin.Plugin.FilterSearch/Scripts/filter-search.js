@@ -155,9 +155,7 @@
         .filter-dialog-hidden .dialogBackdropOpened,
         body.filter-dialog-hidden > .dialogContainer,
         body.filter-dialog-hidden > .dialogBackdrop {
-            position: fixed !important;
-            left: -9999px !important;
-            top: -9999px !important;
+            opacity: 0 !important;
             transition: none !important;
             animation: none !important;
         }
@@ -637,19 +635,21 @@
 
     function waitForDialogClose(callback) {
         // Wait until the filterDialog is fully removed from the DOM before un-hiding
-        var checkInterval = setInterval(function() {
-            if (!document.querySelector('.filterDialog')) {
-                clearInterval(checkInterval);
-                showDialogAfterOperation();
-                if (callback) callback();
-            }
-        }, 50);
-        // Safety timeout: force un-hide after 3 seconds
-        setTimeout(function() {
+        var done = false;
+        function finish() {
+            if (done) return;
+            done = true;
             clearInterval(checkInterval);
             showDialogAfterOperation();
             if (callback) callback();
-        }, 3000);
+        }
+        var checkInterval = setInterval(function() {
+            if (!document.querySelector('.filterDialog')) {
+                finish();
+            }
+        }, 50);
+        // Safety timeout: force un-hide after 3 seconds
+        setTimeout(finish, 3000);
     }
 
     function closeDialogAndWait(dialog, callback) {
@@ -666,45 +666,53 @@
         if (filterBtn) {
             hideDialogDuringOperation();
             filterBtn.click();
-            setTimeout(function() {
+            
+            // Wait for dialog to appear in DOM
+            var attempts = 0;
+            var waitForDialog = setInterval(function() {
                 var dialog = document.querySelector('.filterDialog');
-                if (dialog) {
-                    var collapseSections = dialog.querySelectorAll('[is="emby-collapse"], .emby-collapse');
-                    collapseSections.forEach(function(section) {
-                        var titleEl = section.querySelector('.emby-collapsible-title, h3');
-                        var title = section.getAttribute('title') || (titleEl ? titleEl.textContent.trim() : '');
-                        
-                        if (title.toLowerCase() === category.toLowerCase() || 
-                            title.toLowerCase().includes(category.toLowerCase())) {
-                            // Expand this section
-                            var btn = section.querySelector('.emby-collapsible-button, button');
-                            var content = section.querySelector('.collapseContent');
-                            if (content && !content.classList.contains('expanded') && btn) {
-                                btn.click();
-                            }
-                            setTimeout(function() {
-                                var checkboxList = section.querySelector('.checkboxList');
-                                if (checkboxList) {
-                                    var items = getFilterItems(checkboxList);
-                                    items.forEach(function(item) {
-                                        var text = getItemText(item);
-                                        if (text === value.toLowerCase()) {
-                                            var cb = item.querySelector('input[type="checkbox"]');
-                                            if (cb && cb.checked) {
-                                                cb.click();
-                                            }
-                                        }
-                                    });
-                                }
-                                // Close dialog and wait for it to disappear
-                                closeDialogAndWait(dialog);
-                            }, 200);
-                        }
-                    });
-                } else {
+                attempts++;
+                if (!dialog && attempts < 20) return; // keep waiting up to 1 second
+                clearInterval(waitForDialog);
+                
+                if (!dialog) {
                     showDialogAfterOperation();
+                    return;
                 }
-            }, 300);
+                
+                var collapseSections = dialog.querySelectorAll('[is="emby-collapse"], .emby-collapse');
+                collapseSections.forEach(function(section) {
+                    var titleEl = section.querySelector('.emby-collapsible-title, h3');
+                    var title = section.getAttribute('title') || (titleEl ? titleEl.textContent.trim() : '');
+                    
+                    if (title.toLowerCase() === category.toLowerCase() || 
+                        title.toLowerCase().includes(category.toLowerCase())) {
+                        // Expand this section
+                        var btn = section.querySelector('.emby-collapsible-button, button');
+                        var content = section.querySelector('.collapseContent');
+                        if (content && !content.classList.contains('expanded') && btn) {
+                            btn.click();
+                        }
+                        setTimeout(function() {
+                            var checkboxList = section.querySelector('.checkboxList');
+                            if (checkboxList) {
+                                var items = getFilterItems(checkboxList);
+                                items.forEach(function(item) {
+                                    var text = getItemText(item);
+                                    if (text === value.toLowerCase()) {
+                                        var cb = item.querySelector('input[type="checkbox"]');
+                                        if (cb && cb.checked) {
+                                            cb.click();
+                                        }
+                                    }
+                                });
+                            }
+                            // Close dialog and wait for it to disappear
+                            closeDialogAndWait(dialog);
+                        }, 300);
+                    }
+                });
+            }, 50);
         }
     }
 
@@ -714,30 +722,38 @@
         if (filterBtn) {
             hideDialogDuringOperation();
             filterBtn.click();
-            setTimeout(function() {
+            
+            // Wait for dialog to appear in DOM
+            var attempts = 0;
+            var waitForDialog = setInterval(function() {
                 var dialog = document.querySelector('.filterDialog');
-                if (dialog) {
-                    // Find all checked checkboxes and uncheck them
-                    var allCheckboxes = dialog.querySelectorAll('input[type="checkbox"]:checked');
-                    var index = 0;
-                    
-                    function uncheckNext() {
-                        if (index >= allCheckboxes.length) {
-                            // All done, close the dialog and wait for it to disappear
-                            cachedActiveFilters = {};
-                            closeDialogAndWait(dialog, updateActiveFiltersBar);
-                            return;
-                        }
-                        allCheckboxes[index].click();
-                        index++;
-                        setTimeout(uncheckNext, 80);
-                    }
-                    
-                    uncheckNext();
-                } else {
+                attempts++;
+                if (!dialog && attempts < 20) return; // keep waiting up to 1 second
+                clearInterval(waitForDialog);
+                
+                if (!dialog) {
                     showDialogAfterOperation();
+                    return;
                 }
-            }, 300);
+                
+                // Find all checked checkboxes and uncheck them
+                var allCheckboxes = dialog.querySelectorAll('input[type="checkbox"]:checked');
+                var index = 0;
+                
+                function uncheckNext() {
+                    if (index >= allCheckboxes.length) {
+                        // All done, close the dialog and wait for it to disappear
+                        cachedActiveFilters = {};
+                        closeDialogAndWait(dialog, updateActiveFiltersBar);
+                        return;
+                    }
+                    allCheckboxes[index].click();
+                    index++;
+                    setTimeout(uncheckNext, 80);
+                }
+                
+                uncheckNext();
+            }, 50);
         } else {
             // Fallback to URL manipulation
             var params = new URLSearchParams(window.location.search);

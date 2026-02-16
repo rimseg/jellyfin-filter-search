@@ -9,6 +9,22 @@
     "imageUrl": "https://raw.githubusercontent.com/rimseg/jellyfin-filter-search/main/icon.png",
     "versions": [
       {
+        "changelog": "For Jellyfin 10.11.x\n- Fix: × and Clear All now reliably work from movies page\n- Dialog hidden with opacity instead of off-screen positioning\n- Waits for dialog to appear before interacting",
+        "targetAbi": "10.11.0.0",
+        "version": "1.6.0.4",
+        "sourceUrl": "https://github.com/rimseg/jellyfin-filter-search/releases/download/1.6.0.4/Jellyfin.Plugin.FilterSearch_10.11.0.zip",
+        "checksum": "0a3bb8509acc69c992b0b0de07eba21a",
+        "timestamp": "2026-02-16T00:00:00"
+      },
+      {
+        "changelog": "For Jellyfin 10.10.x\n- Fix: × and Clear All now reliably work from movies page\n- Dialog hidden with opacity instead of off-screen positioning\n- Waits for dialog to appear before interacting",
+        "targetAbi": "10.10.7.0",
+        "version": "1.6.0.4",
+        "sourceUrl": "https://github.com/rimseg/jellyfin-filter-search/releases/download/1.6.0.4/Jellyfin.Plugin.FilterSearch_10.10.7.zip",
+        "checksum": "f50cbaba6dbc63974ae088b2ca63a41c",
+        "timestamp": "2026-02-16T00:00:00"
+      },
+      {
         "changelog": "For Jellyfin 10.11.x\n- Fix: filter dialog now fully closes after using × or Clear All from the movies page",
         "targetAbi": "10.11.0.0",
         "version": "1.6.0.3",
