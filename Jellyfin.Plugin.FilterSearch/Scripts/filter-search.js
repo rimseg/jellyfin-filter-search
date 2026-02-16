@@ -155,8 +155,9 @@
         .filter-dialog-hidden .dialogBackdropOpened,
         body.filter-dialog-hidden > .dialogContainer,
         body.filter-dialog-hidden > .dialogBackdrop {
-            opacity: 0 !important;
-            pointer-events: none !important;
+            position: fixed !important;
+            left: -9999px !important;
+            top: -9999px !important;
             transition: none !important;
             animation: none !important;
         }
