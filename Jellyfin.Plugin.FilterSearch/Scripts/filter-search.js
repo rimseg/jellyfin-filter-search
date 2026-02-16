@@ -150,49 +150,6 @@
         }
     `;
 
-    // Intercept fetch to capture filter params from Jellyfin API calls
-    function setupFetchInterceptor() {
-        if (window._filterSearchFetchIntercepted) return;
-        window._filterSearchFetchIntercepted = true;
-
-        var filterParamNames = ['Genres', 'Tags', 'Studios', 'OfficialRatings', 'Years', 'VideoTypes'];
-        var originalFetch = window.fetch;
-        window.fetch = function(input, init) {
-            try {
-                var url = (typeof input === 'string') ? input : (input && input.url ? input.url : '');
-                // Match Items endpoint calls that Jellyfin makes for library pages
-                if (url && /\/Items(?:\?|$)/.test(url)) {
-                    var apiUrl;
-                    try {
-                        apiUrl = new URL(url, window.location.origin);
-                    } catch(e) { /* ignore malformed URLs */ }
-                    
-                    if (apiUrl) {
-                        var apiParams = apiUrl.searchParams;
-                        var filters = {};
-                        
-                        filterParamNames.forEach(function(param) {
-                            var value = apiParams.get(param);
-                            if (value) {
-                                // Jellyfin uses | or , as separator depending on version
-                                var sep = value.indexOf('|') >= 0 ? '|' : ',';
-                                filters[param] = value.split(sep).map(function(v) { return decodeURIComponent(v).trim(); });
-                            }
-                        });
-                        
-                        if (Object.keys(filters).length > 0) {
-                            cachedActiveFilters = filters;
-                            setTimeout(updateActiveFiltersBar, 200);
-                        }
-                    }
-                }
-            } catch(e) {
-                console.warn('[' + PLUGIN_ID + '] Error in fetch interceptor:', e);
-            }
-            return originalFetch.apply(this, arguments);
-        };
-    }
-
     function injectStyles() {
         if (document.getElementById(PLUGIN_ID + '-styles')) return;
         const styleElement = document.createElement('style');
@@ -482,233 +439,140 @@
         return observer;
     }
 
-    // Active filter bar functionality
+    // ===== Active Filters Bar =====
     const ACTIVE_FILTERS_BAR_ID = PLUGIN_ID + '-active-filters';
-    let activeFiltersData = {};
-    let cachedActiveFilters = {}; // Store filters when dialog closes
+    let cachedActiveFilters = {};
 
-    function parseUrlFilters() {
-        // Check both URL search params and hash params (Jellyfin uses different methods)
-        const searchParams = new URLSearchParams(window.location.search);
-        const hashParams = new URLSearchParams(window.location.hash.replace('#', '').replace(/^.*\?/, ''));
-        
-        const filters = {};
-        const filterParams = ['Genres', 'Tags', 'Studios', 'OfficialRatings', 'Years', 'VideoTypes', 'genres', 'tags', 'studios'];
-        
-        filterParams.forEach(function(param) {
-            // Check search params first, then hash params
-            let value = searchParams.get(param) || hashParams.get(param);
-            if (value) {
-                const normalizedParam = param.charAt(0).toUpperCase() + param.slice(1);
-                filters[normalizedParam] = value.split(',').map(function(v) { return decodeURIComponent(v); });
-            }
-        });
-        return filters;
-    }
-
-    // Capture active filters from the filter dialog
+    // Read checked filters from dialog DOM (works even with collapsed sections)
     function captureFiltersFromDialog(dialog) {
         var filters = {};
-        var collapseSections = dialog.querySelectorAll('[is="emby-collapse"], .emby-collapse');
-        
-        collapseSections.forEach(function(section) {
+        var sections = dialog.querySelectorAll('[is="emby-collapse"], .emby-collapse');
+        sections.forEach(function(section) {
             var titleEl = section.querySelector('.emby-collapsible-title, h3');
             var title = section.getAttribute('title') || (titleEl ? titleEl.textContent.trim() : 'Unknown');
-            
             var content = section.querySelector('.collapseContent, .filterOptions');
             if (!content) return;
-            
             var checkboxList = content.querySelector('.checkboxList');
             if (!checkboxList) return;
-            
             var items = getFilterItems(checkboxList);
-            var selectedValues = [];
-            
+            var selected = [];
             items.forEach(function(item) {
                 var cb = item.querySelector('input[type="checkbox"]');
                 if (cb && cb.checked) {
                     var text = getItemText(item);
-                    // Capitalize first letter
                     text = text.charAt(0).toUpperCase() + text.slice(1);
-                    selectedValues.push(text);
+                    selected.push(text);
                 }
             });
-            
-            if (selectedValues.length > 0) {
-                filters[title] = selectedValues;
-            }
+            if (selected.length > 0) filters[title] = selected;
         });
-        
         cachedActiveFilters = filters;
         return filters;
     }
 
-    function createActiveFiltersBar() {
-        let bar = document.getElementById(ACTIVE_FILTERS_BAR_ID);
-        if (!bar) {
-            bar = document.createElement('div');
-            bar.id = ACTIVE_FILTERS_BAR_ID;
-            bar.className = 'active-filters-bar hidden';
+    // Find the filter button on the current page
+    function findFilterButton() {
+        var btn = document.querySelector('.btnFilter');
+        if (btn) return btn;
+        var allBtns = document.querySelectorAll('button');
+        for (var i = 0; i < allBtns.length; i++) {
+            var icon = allBtns[i].querySelector('.md-icon, .material-icons');
+            if (icon && icon.textContent.trim() === 'filter_list') return allBtns[i];
         }
-        return bar;
+        return null;
     }
 
-    function updateActiveFiltersBar() {
-        // First try URL params, then fall back to cached filters from dialog
-        var filters = parseUrlFilters();
-        
-        // If no URL filters, use cached filters
-        if (Object.keys(filters).length === 0) {
-            filters = cachedActiveFilters;
-        }
-        
-        var bar = document.getElementById(ACTIVE_FILTERS_BAR_ID);
-        
-        var hasFilters = Object.keys(filters).some(function(key) {
-            return filters[key] && filters[key].length > 0;
-        });
-
-        // Also check if the filter indicator is visible (Jellyfin shows ! when filters active)
-        var filterIndicator = document.querySelector('.filterIndicator:not(.hide)');
-        var hasIndicator = filterIndicator && !filterIndicator.classList.contains('hide');
-
-        if (!hasFilters && !hasIndicator) {
-            if (bar) bar.classList.add('hidden');
-            return;
-        }
-
-        // Find the appropriate container - look for the toolbar area
-        var toolbar = document.querySelector('.flex.align-items-center.justify-content-center.flex-wrap-wrap.padded-top');
-        if (!toolbar) {
-            toolbar = document.querySelector('.btnFilter-wrapper');
-            if (toolbar) toolbar = toolbar.closest('.flex');
-        }
-        if (!toolbar) {
-            toolbar = document.querySelector('.itemsContainer');
-        }
-        
-        if (!toolbar) {
-            console.log('[' + PLUGIN_ID + '] Could not find container for active filters bar');
-            return;
-        }
-
-        if (!bar) {
-            bar = createActiveFiltersBar();
-        }
-
-        // Insert bar after the toolbar
-        if (!bar.parentElement) {
-            if (toolbar.nextSibling) {
-                toolbar.parentElement.insertBefore(bar, toolbar.nextSibling);
-            } else {
-                toolbar.parentElement.appendChild(bar);
+    // Poll for filter dialog to appear (proven polling pattern)
+    function waitForDialog(callback, timeoutMs) {
+        timeoutMs = timeoutMs || 3000;
+        var start = Date.now();
+        var check = setInterval(function() {
+            var dialog = document.querySelector('.filterDialog');
+            if (dialog) {
+                clearInterval(check);
+                callback(dialog);
+            } else if (Date.now() - start > timeoutMs) {
+                clearInterval(check);
             }
+        }, 50);
+    }
+
+    // Poll for checkboxes to be loaded in a section
+    function waitForCheckboxes(section, callback, timeoutMs) {
+        timeoutMs = timeoutMs || 2000;
+        var start = Date.now();
+        var check = setInterval(function() {
+            var content = section.querySelector('.collapseContent, .filterOptions');
+            var checkboxList = content ? content.querySelector('.checkboxList') : null;
+            if (checkboxList && checkboxList.querySelector('label')) {
+                clearInterval(check);
+                callback(checkboxList);
+            } else if (Date.now() - start > timeoutMs) {
+                clearInterval(check);
+            }
+        }, 50);
+    }
+
+    // Close the filter dialog
+    function closeFilterDialog(dialog) {
+        var selectors = ['.btnCloseDialog', '.btnCancel', 'button[title="Close"]', '.dialog-close'];
+        for (var i = 0; i < selectors.length; i++) {
+            var btn = dialog.querySelector(selectors[i]);
+            if (btn) { btn.click(); return; }
         }
+        var backdrop = document.querySelector('.dialogBackdrop');
+        if (backdrop) backdrop.click();
+    }
 
-        // Build the bar content
-        bar.innerHTML = '';
-        bar.classList.remove('hidden');
-
-        const label = document.createElement('span');
-        label.className = 'active-filters-label';
-        label.textContent = 'Active Filters:';
-        bar.appendChild(label);
-
-        const categoryNames = {
-            'Genres': 'Genre',
-            'Tags': 'Tag',
-            'Studios': 'Studio',
-            'OfficialRatings': 'Rating',
-            'Years': 'Year',
-            'VideoTypes': 'Type'
-        };
-
-        Object.keys(filters).forEach(function(category) {
-            filters[category].forEach(function(value) {
-                const tag = document.createElement('span');
-                tag.className = 'active-filter-tag';
-                
-                const catSpan = document.createElement('span');
-                catSpan.className = 'filter-category';
-                catSpan.textContent = (categoryNames[category] || category) + ':';
-                tag.appendChild(catSpan);
-
-                const valueSpan = document.createElement('span');
-                valueSpan.textContent = value;
-                tag.appendChild(valueSpan);
-
-                const removeBtn = document.createElement('button');
-                removeBtn.className = 'remove-filter';
-                removeBtn.innerHTML = '×';
-                removeBtn.title = 'Remove filter';
-                removeBtn.addEventListener('click', function() {
-                    removeFilter(category, value);
-                });
-                tag.appendChild(removeBtn);
-
-                bar.appendChild(tag);
-            });
+    // Open filter dialog and execute callback when ready
+    function openDialogAndDo(callback) {
+        var filterBtn = findFilterButton();
+        if (!filterBtn) return;
+        filterBtn.click();
+        waitForDialog(function(dialog) {
+            setTimeout(function() { callback(dialog); }, 100);
         });
-
-        const clearAllBtn = document.createElement('button');
-        clearAllBtn.className = 'clear-all-filters-btn';
-        clearAllBtn.textContent = 'Clear All';
-        clearAllBtn.addEventListener('click', clearAllFilters);
-        bar.appendChild(clearAllBtn);
     }
 
-    function getUrlParts() {
-        // Jellyfin can use either search params or hash-based routing
-        var hash = window.location.hash || '';
-        var hashBase = hash.split('?')[0];
-        var hashQuery = hash.indexOf('?') >= 0 ? hash.split('?')[1] : '';
-        var searchQuery = window.location.search.replace('?', '');
-        
-        // Determine which style is in use
-        if (hashQuery) {
-            return { mode: 'hash', base: hashBase, params: new URLSearchParams(hashQuery) };
-        } else {
-            return { mode: 'search', base: window.location.pathname, params: new URLSearchParams(searchQuery) };
+    // Remove a single filter: update cache, open dialog, poll for checkbox, uncheck, close
+    function removeFilter(category, value) {
+        // Immediate visual feedback
+        if (cachedActiveFilters[category]) {
+            cachedActiveFilters[category] = cachedActiveFilters[category].filter(function(v) {
+                return v.toLowerCase() !== value.toLowerCase();
+            });
+            if (cachedActiveFilters[category].length === 0) delete cachedActiveFilters[category];
         }
-    }
+        updateActiveFiltersBar();
 
-    function applyUrlParams(urlParts) {
-        var paramStr = urlParts.params.toString();
-        if (urlParts.mode === 'hash') {
-            var newHash = urlParts.base + (paramStr ? '?' + paramStr : '');
-            window.location.hash = newHash;
-        } else {
-            var newUrl = urlParts.base + (paramStr ? '?' + paramStr : '');
-            window.history.pushState({}, '', newUrl);
-        }
-        // Clear cached filters and reload the page to apply changes
-        cachedActiveFilters = {};
-        window.location.reload();
-    }
+        openDialogAndDo(function(dialog) {
+            var sections = dialog.querySelectorAll('[is="emby-collapse"], .emby-collapse');
+            var targetSection = null;
 
-    function uncheckFilterInDialog(dialog, category, value) {
-        var collapseSections = dialog.querySelectorAll('[is="emby-collapse"], .emby-collapse');
-        collapseSections.forEach(function(section) {
-            var titleEl = section.querySelector('.emby-collapsible-title, h3');
-            var sectionTitle = section.getAttribute('title') || (titleEl ? titleEl.textContent.trim() : '');
-            
-            // Match section title to category (e.g. "Genres" matches "Genre" section)
-            if (sectionTitle.toLowerCase().replace(/s$/, '') !== category.toLowerCase().replace(/s$/, '') &&
-                sectionTitle.toLowerCase() !== category.toLowerCase()) {
+            sections.forEach(function(section) {
+                var titleEl = section.querySelector('.emby-collapsible-title, h3');
+                var title = section.getAttribute('title') || (titleEl ? titleEl.textContent.trim() : '');
+                var catNorm = category.toLowerCase().replace(/s$/, '');
+                var titleNorm = title.toLowerCase().replace(/s$/, '');
+                if (titleNorm === catNorm || title.toLowerCase() === category.toLowerCase()) {
+                    targetSection = section;
+                }
+            });
+
+            if (!targetSection) {
+                closeFilterDialog(dialog);
                 return;
             }
-            
+
             // Expand section if collapsed
-            var button = section.querySelector('.emby-collapsible-button, button');
-            var content = section.querySelector('.collapseContent, .filterOptions');
-            if (content && !content.classList.contains('expanded')) {
-                if (button) button.click();
+            var expandBtn = targetSection.querySelector('.emby-collapsible-button, button');
+            var content = targetSection.querySelector('.collapseContent, .filterOptions');
+            if (content && !content.classList.contains('expanded') && expandBtn) {
+                expandBtn.click();
             }
-            
-            setTimeout(function() {
-                var checkboxList = (content || section).querySelector('.checkboxList');
-                if (!checkboxList) return;
-                
+
+            // Poll for checkboxes, then find and uncheck the target
+            waitForCheckboxes(targetSection, function(checkboxList) {
                 var items = getFilterItems(checkboxList);
                 items.forEach(function(item) {
                     var cb = item.querySelector('input[type="checkbox"]');
@@ -718,210 +582,191 @@
                         cb.click();
                     }
                 });
-                
-                // Close the dialog after a short delay
-                setTimeout(function() {
-                    var closeBtn = dialog.querySelector('.btnCloseDialog, .btnCancel, button[title="Close"]');
-                    if (closeBtn) {
-                        closeBtn.click();
-                    } else {
-                        // Try clicking outside / pressing escape
-                        var overlay = document.querySelector('.dialogBackdrop, .dialogContainer');
-                        if (overlay) overlay.click();
-                    }
-                }, 200);
-            }, 200);
-        });
-    }
-
-    function uncheckAllFiltersInDialog(dialog) {
-        var collapseSections = dialog.querySelectorAll('[is="emby-collapse"], .emby-collapse');
-        var sectionsToProcess = [];
-        
-        collapseSections.forEach(function(section) {
-            var button = section.querySelector('.emby-collapsible-button, button');
-            var content = section.querySelector('.collapseContent, .filterOptions');
-            if (content && !content.classList.contains('expanded')) {
-                if (button) button.click();
-            }
-            sectionsToProcess.push(content || section);
-        });
-        
-        setTimeout(function() {
-            sectionsToProcess.forEach(function(content) {
-                var checkboxList = content.querySelector('.checkboxList');
-                if (!checkboxList) return;
-                
-                var items = getFilterItems(checkboxList);
-                items.forEach(function(item) {
-                    var cb = item.querySelector('input[type="checkbox"]');
-                    if (cb && cb.checked) {
-                        cb.click();
-                    }
-                });
+                setTimeout(function() { closeFilterDialog(dialog); }, 150);
             });
-            
-            // Close the dialog after unchecking
-            setTimeout(function() {
-                var closeBtn = dialog.querySelector('.btnCloseDialog, .btnCancel, button[title="Close"]');
-                if (closeBtn) {
-                    closeBtn.click();
-                } else {
-                    var overlay = document.querySelector('.dialogBackdrop, .dialogContainer');
-                    if (overlay) overlay.click();
-                }
-            }, 200);
-        }, 300);
+        });
     }
 
-    function removeFilter(category, value) {
-        var urlParts = getUrlParts();
-        var params = urlParts.params;
-        
-        // Try both cases of the category name
-        var paramName = null;
-        var filterParamNames = ['Genres', 'Tags', 'Studios', 'OfficialRatings', 'Years', 'VideoTypes', 'genres', 'tags', 'studios'];
-        filterParamNames.forEach(function(name) {
-            if (name.toLowerCase() === category.toLowerCase()) {
-                if (params.has(name)) paramName = name;
-            }
-        });
-        
-        if (!paramName) {
-            // Filter not found in URL - use dialog approach
-            // Remove from cache immediately for visual feedback
-            if (cachedActiveFilters[category]) {
-                cachedActiveFilters[category] = cachedActiveFilters[category].filter(function(v) {
-                    return v.toLowerCase() !== value.toLowerCase();
-                });
-                if (cachedActiveFilters[category].length === 0) {
-                    delete cachedActiveFilters[category];
-                }
-            }
-            updateActiveFiltersBar();
-            
-            // Open filter dialog to actually uncheck the filter
-            var filterBtn = document.querySelector('.btnFilter, .filterButton, button[title="Filter"]');
-            if (!filterBtn) {
-                filterBtn = document.querySelector('button .md-icon, button .material-icons');
-                if (filterBtn) {
-                    // Find parent buttons with filter_list icon
-                    var allBtns = document.querySelectorAll('button');
-                    for (var bi = 0; bi < allBtns.length; bi++) {
-                        var icon = allBtns[bi].querySelector('.md-icon, .material-icons');
-                        if (icon && icon.textContent.trim() === 'filter_list') {
-                            filterBtn = allBtns[bi];
-                            break;
-                        }
-                    }
-                }
-            }
-            if (filterBtn) {
-                filterBtn.click();
-                // Wait for dialog to appear, then uncheck the filter
-                var dialogWatcher = new MutationObserver(function(mutations) {
-                    var dialog = document.querySelector('.filterDialog');
-                    if (dialog) {
-                        dialogWatcher.disconnect();
-                        setTimeout(function() {
-                            uncheckFilterInDialog(dialog, category, value);
-                        }, 300);
-                    }
-                });
-                dialogWatcher.observe(document.body, { childList: true, subtree: true });
-                // Timeout safety: stop watching after 3s
-                setTimeout(function() { dialogWatcher.disconnect(); }, 3000);
-            }
-            return;
-        }
-        
-        var currentValues = params.get(paramName).split(',').map(function(v) { return decodeURIComponent(v); });
-        var newValues = currentValues.filter(function(v) { 
-            return v.toLowerCase() !== value.toLowerCase(); 
-        });
-        
-        if (newValues.length > 0) {
-            params.set(paramName, newValues.join(','));
-        } else {
-            params.delete(paramName);
-        }
-        
-        applyUrlParams(urlParts);
-    }
-
+    // Clear all filters: open dialog, poll each section, uncheck all (one by one like Select All/None)
     function clearAllFilters() {
-        var urlParts = getUrlParts();
-        var params = urlParts.params;
-        var filterParamNames = ['Genres', 'Tags', 'Studios', 'OfficialRatings', 'Years', 'VideoTypes', 'genres', 'tags', 'studios'];
-        
-        var hadUrlFilters = false;
-        filterParamNames.forEach(function(name) {
-            if (params.has(name)) hadUrlFilters = true;
-            params.delete(name);
-        });
-        
-        if (hadUrlFilters) {
-            applyUrlParams(urlParts);
-            return;
-        }
-        
-        // Filters not in URL - use dialog approach
         cachedActiveFilters = {};
         updateActiveFiltersBar();
-        
-        var filterBtn = document.querySelector('.btnFilter, .filterButton, button[title="Filter"]');
-        if (!filterBtn) {
-            var allBtns = document.querySelectorAll('button');
-            for (var bi = 0; bi < allBtns.length; bi++) {
-                var icon = allBtns[bi].querySelector('.md-icon, .material-icons');
-                if (icon && icon.textContent.trim() === 'filter_list') {
-                    filterBtn = allBtns[bi];
-                    break;
+
+        openDialogAndDo(function(dialog) {
+            var sections = dialog.querySelectorAll('[is="emby-collapse"], .emby-collapse');
+            var totalSections = sections.length;
+            var processedSections = 0;
+
+            if (totalSections === 0) {
+                closeFilterDialog(dialog);
+                return;
+            }
+
+            sections.forEach(function(section) {
+                // Expand section if collapsed
+                var expandBtn = section.querySelector('.emby-collapsible-button, button');
+                var content = section.querySelector('.collapseContent, .filterOptions');
+                if (content && !content.classList.contains('expanded') && expandBtn) {
+                    expandBtn.click();
                 }
+
+                // Poll for checkboxes, then uncheck one at a time with delay
+                waitForCheckboxes(section, function(checkboxList) {
+                    var items = getFilterItems(checkboxList);
+                    var checkedBoxes = [];
+                    items.forEach(function(item) {
+                        var cb = item.querySelector('input[type="checkbox"]');
+                        if (cb && cb.checked) checkedBoxes.push(cb);
+                    });
+
+                    // Uncheck one at a time (same proven pattern as Select All/None)
+                    var idx = 0;
+                    function uncheckNext() {
+                        if (idx < checkedBoxes.length) {
+                            checkedBoxes[idx].click();
+                            idx++;
+                            setTimeout(uncheckNext, 80);
+                        } else {
+                            processedSections++;
+                            if (processedSections >= totalSections) {
+                                setTimeout(function() { closeFilterDialog(dialog); }, 150);
+                            }
+                        }
+                    }
+                    uncheckNext();
+                });
+            });
+        });
+    }
+
+    function createActiveFiltersBar() {
+        var bar = document.getElementById(ACTIVE_FILTERS_BAR_ID);
+        if (!bar) {
+            bar = document.createElement('div');
+            bar.id = ACTIVE_FILTERS_BAR_ID;
+            bar.className = 'active-filters-bar hidden';
+        }
+        return bar;
+    }
+
+    function updateActiveFiltersBar() {
+        var filters = cachedActiveFilters;
+        var bar = document.getElementById(ACTIVE_FILTERS_BAR_ID);
+
+        var hasFilters = Object.keys(filters).some(function(key) {
+            return filters[key] && filters[key].length > 0;
+        });
+
+        // Check Jellyfin's filter indicator (! icon when filters active)
+        var filterIndicator = document.querySelector('.filterIndicator:not(.hide)');
+        var hasIndicator = filterIndicator && !filterIndicator.classList.contains('hide');
+
+        if (!hasFilters && !hasIndicator) {
+            if (bar) bar.classList.add('hidden');
+            return;
+        }
+
+        // Find container for the bar
+        var toolbar = document.querySelector('.flex.align-items-center.justify-content-center.flex-wrap-wrap.padded-top');
+        if (!toolbar) {
+            toolbar = document.querySelector('.btnFilter');
+            if (toolbar) toolbar = toolbar.closest('.flex');
+        }
+        if (!toolbar) toolbar = document.querySelector('.itemsContainer');
+        if (!toolbar) return;
+
+        if (!bar) bar = createActiveFiltersBar();
+        if (!bar.parentElement) {
+            if (toolbar.nextSibling) {
+                toolbar.parentElement.insertBefore(bar, toolbar.nextSibling);
+            } else {
+                toolbar.parentElement.appendChild(bar);
             }
         }
-        if (filterBtn) {
-            filterBtn.click();
-            var dialogWatcher = new MutationObserver(function(mutations) {
-                var dialog = document.querySelector('.filterDialog');
-                if (dialog) {
-                    dialogWatcher.disconnect();
-                    setTimeout(function() {
-                        uncheckAllFiltersInDialog(dialog);
-                    }, 300);
-                }
+
+        bar.innerHTML = '';
+        bar.classList.remove('hidden');
+
+        // If we have specific filter data, show tags
+        if (hasFilters) {
+            var label = document.createElement('span');
+            label.className = 'active-filters-label';
+            label.textContent = 'Active Filters:';
+            bar.appendChild(label);
+
+            var categoryNames = {
+                'Genres': 'Genre', 'Tags': 'Tag', 'Studios': 'Studio',
+                'OfficialRatings': 'Rating', 'Years': 'Year', 'VideoTypes': 'Type'
+            };
+
+            Object.keys(filters).forEach(function(category) {
+                filters[category].forEach(function(value) {
+                    var tag = document.createElement('span');
+                    tag.className = 'active-filter-tag';
+
+                    var catSpan = document.createElement('span');
+                    catSpan.className = 'filter-category';
+                    catSpan.textContent = (categoryNames[category] || category) + ':';
+                    tag.appendChild(catSpan);
+
+                    var valueSpan = document.createElement('span');
+                    valueSpan.textContent = value;
+                    tag.appendChild(valueSpan);
+
+                    var removeBtn = document.createElement('button');
+                    removeBtn.className = 'remove-filter';
+                    removeBtn.innerHTML = '&times;';
+                    removeBtn.title = 'Remove filter';
+                    removeBtn.addEventListener('click', function() {
+                        removeFilter(category, value);
+                    });
+                    tag.appendChild(removeBtn);
+
+                    bar.appendChild(tag);
+                });
             });
-            dialogWatcher.observe(document.body, { childList: true, subtree: true });
-            setTimeout(function() { dialogWatcher.disconnect(); }, 3000);
+
+            var clearBtn = document.createElement('button');
+            clearBtn.className = 'clear-all-filters-btn';
+            clearBtn.textContent = 'Clear All';
+            clearBtn.addEventListener('click', clearAllFilters);
+            bar.appendChild(clearBtn);
+        } else if (hasIndicator) {
+            // Filters are active but we don't know specifics yet
+            var hint = document.createElement('span');
+            hint.className = 'active-filters-label';
+            hint.textContent = 'Filters are active — open the filter dialog to see details';
+            bar.appendChild(hint);
+
+            var clearBtn = document.createElement('button');
+            clearBtn.className = 'clear-all-filters-btn';
+            clearBtn.textContent = 'Clear All';
+            clearBtn.addEventListener('click', clearAllFilters);
+            bar.appendChild(clearBtn);
         }
     }
 
     function setupPageObserver() {
-        // Update active filters bar when page content changes
-        let debounceTimer;
-        const pageObserver = new MutationObserver(function() {
+        var debounceTimer;
+        var pageObserver = new MutationObserver(function() {
             clearTimeout(debounceTimer);
-            debounceTimer = setTimeout(updateActiveFiltersBar, 200);
+            debounceTimer = setTimeout(updateActiveFiltersBar, 300);
         });
         pageObserver.observe(document.body, { childList: true, subtree: true });
 
-        // Also listen for URL changes (popstate)
         window.addEventListener('popstate', function() {
-            setTimeout(updateActiveFiltersBar, 100);
+            cachedActiveFilters = {};
+            setTimeout(updateActiveFiltersBar, 200);
         });
-
-        // Initial update
-        setTimeout(updateActiveFiltersBar, 500);
     }
 
     function init() {
         console.log('[' + PLUGIN_ID + '] Initializing Filter Search Plugin');
-        setupFetchInterceptor();
         injectStyles();
         setupObserver();
         setupPageObserver();
         document.querySelectorAll('.filterDialog').forEach(processFilterDialog);
-        updateActiveFiltersBar();
+        setTimeout(updateActiveFiltersBar, 500);
         console.log('[' + PLUGIN_ID + '] Filter Search Plugin initialized successfully');
     }
 
