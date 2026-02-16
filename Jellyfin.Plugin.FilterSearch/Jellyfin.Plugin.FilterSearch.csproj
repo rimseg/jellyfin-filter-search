@@ -7,8 +7,8 @@
     <TargetFramework Condition="'$(JellyfinVersion)' == '10.10.7'">net8.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
-    <AssemblyVersion>1.5.0.0</AssemblyVersion>
-    <FileVersion>1.5.0.0</FileVersion>
+    <AssemblyVersion>1.6.0.0</AssemblyVersion>
+    <FileVersion>1.6.0.0</FileVersion>
     <RootNamespace>Jellyfin.Plugin.FilterSearch</RootNamespace>
     <AssemblyName>Jellyfin.Plugin.FilterSearch</AssemblyName>
   </PropertyGroup>
