@@ -9,6 +9,22 @@
     "imageUrl": "https://raw.githubusercontent.com/rimseg/jellyfin-filter-search/main/icon.png",
     "versions": [
       {
+        "changelog": "For Jellyfin 10.11.x\n- Build fix: correctly compiled with .NET 9 for Jellyfin 10.11.x\n- Hidden dialog operations: filter removal from the active bar no longer flashes the dialog\n- Improved filter bar padding: active filters bar no longer stretches edge-to-edge",
+        "targetAbi": "10.11.0.0",
+        "version": "1.6.0.1",
+        "sourceUrl": "https://github.com/rimseg/jellyfin-filter-search/releases/download/1.6.0.1/Jellyfin.Plugin.FilterSearch_10.11.0.zip",
+        "checksum": "2370ad9b4d13ce18982178e94cbf7981",
+        "timestamp": "2026-02-16T00:00:00"
+      },
+      {
+        "changelog": "For Jellyfin 10.10.x\n- Build fix: correctly compiled with .NET 8 for Jellyfin 10.10.x\n- Hidden dialog operations: filter removal from the active bar no longer flashes the dialog\n- Improved filter bar padding: active filters bar no longer stretches edge-to-edge",
+        "targetAbi": "10.10.7.0",
+        "version": "1.6.0.1",
+        "sourceUrl": "https://github.com/rimseg/jellyfin-filter-search/releases/download/1.6.0.1/Jellyfin.Plugin.FilterSearch_10.10.7.zip",
+        "checksum": "15a76d22b8959c590b29e61bf07c4fd7",
+        "timestamp": "2026-02-16T00:00:00"
+      },
+      {
         "changelog": "For Jellyfin 10.11.x\n- Hidden dialog operations: filter removal from the active bar no longer flashes the dialog\n- Improved filter bar padding: active filters bar no longer stretches edge-to-edge",
         "targetAbi": "10.11.0.0",
         "version": "1.6.0.0",
