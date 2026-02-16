@@ -9,6 +9,22 @@
     "imageUrl": "https://raw.githubusercontent.com/rimseg/jellyfin-filter-search/main/icon.png",
     "versions": [
       {
+        "changelog": "For Jellyfin 10.11.x\n- Fix: × and Clear All buttons now work correctly\n- Hidden dialog uses off-screen positioning instead of pointer-events",
+        "targetAbi": "10.11.0.0",
+        "version": "1.6.0.2",
+        "sourceUrl": "https://github.com/rimseg/jellyfin-filter-search/releases/download/1.6.0.2/Jellyfin.Plugin.FilterSearch_10.11.0.zip",
+        "checksum": "ad906ac393e94dd468fa0f6e7228dbe9",
+        "timestamp": "2026-02-16T00:00:00"
+      },
+      {
+        "changelog": "For Jellyfin 10.10.x\n- Fix: × and Clear All buttons now work correctly\n- Hidden dialog uses off-screen positioning instead of pointer-events",
+        "targetAbi": "10.10.7.0",
+        "version": "1.6.0.2",
+        "sourceUrl": "https://github.com/rimseg/jellyfin-filter-search/releases/download/1.6.0.2/Jellyfin.Plugin.FilterSearch_10.10.7.zip",
+        "checksum": "f29a6804ab120494b568dbed9ac38295",
+        "timestamp": "2026-02-16T00:00:00"
+      },
+      {
         "changelog": "For Jellyfin 10.11.x\n- Build fix: correctly compiled with .NET 9 for Jellyfin 10.11.x\n- Hidden dialog operations: filter removal from the active bar no longer flashes the dialog\n- Improved filter bar padding: active filters bar no longer stretches edge-to-edge",
         "targetAbi": "10.11.0.0",
         "version": "1.6.0.1",
