@@ -68,6 +68,25 @@
             font-style: italic;
             font-size: 0.9em;
         }
+        .filter-select-actions {
+            display: flex;
+            gap: 0.8em;
+            padding: 0.4em 0;
+            align-items: center;
+        }
+        .filter-select-actions .filter-action-btn {
+            background: none;
+            border: none;
+            color: #00a4dc;
+            cursor: pointer;
+            font-size: 0.85em;
+            padding: 0.2em 0.4em;
+            text-decoration: underline;
+            font-weight: 500;
+        }
+        .filter-select-actions .filter-action-btn:hover {
+            color: #0fbcff;
+        }
     `;
 
     function injectStyles() {
@@ -161,6 +180,45 @@
         }
     }
 
+    function createSelectActions(checkboxList, searchInput) {
+        const wrapper = document.createElement('div');
+        wrapper.className = 'filter-select-actions';
+
+        const selectAllBtn = document.createElement('button');
+        selectAllBtn.type = 'button';
+        selectAllBtn.className = 'filter-action-btn';
+        selectAllBtn.textContent = 'Select All';
+
+        const selectNoneBtn = document.createElement('button');
+        selectNoneBtn.type = 'button';
+        selectNoneBtn.className = 'filter-action-btn';
+        selectNoneBtn.textContent = 'None';
+
+        function setAll(checked) {
+            var items = getFilterItems(checkboxList);
+            items.forEach(function(item) {
+                if (item.classList.contains('filter-item-hidden')) return;
+                var cb = item.querySelector('input[type="checkbox"]');
+                if (cb && cb.checked !== checked) {
+                    cb.checked = checked;
+                    cb.dispatchEvent(new Event('change', { bubbles: true }));
+                }
+            });
+            setTimeout(function() {
+                var currentItems = getFilterItems(checkboxList);
+                sortEnabledToTop(currentItems, checkboxList);
+                if (searchInput) filterItems(currentItems, searchInput.value, checkboxList);
+            }, 10);
+        }
+
+        selectAllBtn.addEventListener('click', function() { setAll(true); });
+        selectNoneBtn.addEventListener('click', function() { setAll(false); });
+
+        wrapper.appendChild(selectAllBtn);
+        wrapper.appendChild(selectNoneBtn);
+        return wrapper;
+    }
+
     function initializeSection(collapseSection) {
         const content = collapseSection.querySelector('.collapseContent, .filterOptions');
         if (!content) return;
@@ -179,6 +237,9 @@
         const searchWrapper = createSearchInput(placeholder);
         content.insertBefore(searchWrapper, content.firstChild);
         const searchInput = searchWrapper.querySelector('.' + SEARCH_INPUT_CLASS);
+
+        const selectActions = createSelectActions(checkboxList, searchInput);
+        content.insertBefore(selectActions, checkboxList);
 
         searchInput.addEventListener('input', function(e) {
             filterItems(items, e.target.value, checkboxList);
