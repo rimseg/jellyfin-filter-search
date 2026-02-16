@@ -93,7 +93,7 @@
             align-items: center;
             gap: 0.5em;
             padding: 0.6em 1em;
-            margin: 0.5em 0;
+            margin: 0.5em 3.3%;
             background: rgba(0, 164, 220, 0.1);
             border: 1px solid rgba(0, 164, 220, 0.3);
             border-radius: 6px;
@@ -147,6 +147,18 @@
         .clear-all-filters-btn:hover {
             background: rgba(255, 107, 107, 0.3);
             border-color: rgba(255, 107, 107, 0.6);
+        }
+        .filter-dialog-hidden .dialogContainer,
+        .filter-dialog-hidden .dialog,
+        .filter-dialog-hidden .filterDialog,
+        .filter-dialog-hidden .dialogBackdrop,
+        .filter-dialog-hidden .dialogBackdropOpened,
+        body.filter-dialog-hidden > .dialogContainer,
+        body.filter-dialog-hidden > .dialogBackdrop {
+            opacity: 0 !important;
+            pointer-events: none !important;
+            transition: none !important;
+            animation: none !important;
         }
     `;
 
@@ -614,10 +626,19 @@
         bar.appendChild(clearAllBtn);
     }
 
+    function hideDialogDuringOperation() {
+        document.body.classList.add('filter-dialog-hidden');
+    }
+
+    function showDialogAfterOperation() {
+        document.body.classList.remove('filter-dialog-hidden');
+    }
+
     function removeFilter(category, value) {
-        // Open filter dialog and uncheck the specific filter
+        // Open filter dialog invisibly and uncheck the specific filter
         var filterBtn = document.querySelector('.btnFilter');
         if (filterBtn) {
+            hideDialogDuringOperation();
             filterBtn.click();
             setTimeout(function() {
                 var dialog = document.querySelector('.filterDialog');
@@ -653,19 +674,23 @@
                                 setTimeout(function() {
                                     var closeBtn = dialog.querySelector('.btnCancel, .dialogCloseButton, [data-action="close"]');
                                     if (closeBtn) closeBtn.click();
+                                    setTimeout(showDialogAfterOperation, 100);
                                 }, 100);
                             }, 200);
                         }
                     });
+                } else {
+                    showDialogAfterOperation();
                 }
             }, 300);
         }
     }
 
     function clearAllFilters() {
-        // Click the filter button to open the dialog
+        // Click the filter button to open the dialog invisibly
         var filterBtn = document.querySelector('.btnFilter');
         if (filterBtn) {
+            hideDialogDuringOperation();
             filterBtn.click();
             setTimeout(function() {
                 var dialog = document.querySelector('.filterDialog');
@@ -681,7 +706,10 @@
                             setTimeout(function() {
                                 var closeBtn = dialog.querySelector('.btnCancel, .dialogCloseButton, [data-action="close"]');
                                 if (closeBtn) closeBtn.click();
-                                setTimeout(updateActiveFiltersBar, 300);
+                                setTimeout(function() {
+                                    showDialogAfterOperation();
+                                    updateActiveFiltersBar();
+                                }, 200);
                             }, 100);
                             return;
                         }
@@ -691,6 +719,8 @@
                     }
                     
                     uncheckNext();
+                } else {
+                    showDialogAfterOperation();
                 }
             }, 300);
         } else {
