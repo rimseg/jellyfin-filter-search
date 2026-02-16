@@ -87,6 +87,67 @@
         .filter-select-actions .filter-action-btn:hover {
             color: #0fbcff;
         }
+        .active-filters-bar {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 0.5em;
+            padding: 0.6em 1em;
+            margin: 0.5em 0;
+            background: rgba(0, 164, 220, 0.1);
+            border: 1px solid rgba(0, 164, 220, 0.3);
+            border-radius: 6px;
+        }
+        .active-filters-bar.hidden {
+            display: none;
+        }
+        .active-filters-label {
+            font-size: 0.85em;
+            color: rgba(255, 255, 255, 0.7);
+            margin-right: 0.3em;
+        }
+        .active-filter-tag {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.4em;
+            padding: 0.25em 0.6em;
+            background: rgba(0, 164, 220, 0.2);
+            border: 1px solid rgba(0, 164, 220, 0.4);
+            border-radius: 4px;
+            font-size: 0.8em;
+            color: #fff;
+        }
+        .active-filter-tag .filter-category {
+            color: rgba(255, 255, 255, 0.6);
+            font-size: 0.9em;
+        }
+        .active-filter-tag .remove-filter {
+            background: none;
+            border: none;
+            color: rgba(255, 255, 255, 0.6);
+            cursor: pointer;
+            padding: 0;
+            font-size: 1.1em;
+            line-height: 1;
+            margin-left: 0.2em;
+        }
+        .active-filter-tag .remove-filter:hover {
+            color: #ff6b6b;
+        }
+        .clear-all-filters-btn {
+            background: rgba(255, 107, 107, 0.2);
+            border: 1px solid rgba(255, 107, 107, 0.4);
+            color: #ff6b6b;
+            cursor: pointer;
+            padding: 0.25em 0.6em;
+            border-radius: 4px;
+            font-size: 0.8em;
+            margin-left: auto;
+        }
+        .clear-all-filters-btn:hover {
+            background: rgba(255, 107, 107, 0.3);
+            border-color: rgba(255, 107, 107, 0.6);
+        }
     `;
 
     function injectStyles() {
@@ -196,19 +257,24 @@
 
         function setAll(checked) {
             var items = getFilterItems(checkboxList);
+            var changedCheckboxes = [];
             items.forEach(function(item) {
                 if (item.classList.contains('filter-item-hidden')) return;
                 var cb = item.querySelector('input[type="checkbox"]');
                 if (cb && cb.checked !== checked) {
-                    cb.checked = checked;
-                    cb.dispatchEvent(new Event('change', { bubbles: true }));
+                    changedCheckboxes.push({ checkbox: cb, label: item });
                 }
+            });
+            // Use click() to properly trigger Jellyfin's event handlers
+            changedCheckboxes.forEach(function(item) {
+                // Click triggers the full event chain that Jellyfin listens to
+                item.checkbox.click();
             });
             setTimeout(function() {
                 var currentItems = getFilterItems(checkboxList);
                 sortEnabledToTop(currentItems, checkboxList);
                 if (searchInput) filterItems(currentItems, searchInput.value, checkboxList);
-            }, 10);
+            }, 50);
         }
 
         selectAllBtn.addEventListener('click', function() { setAll(true); });
@@ -311,11 +377,165 @@
         return observer;
     }
 
+    // Active filter bar functionality
+    const ACTIVE_FILTERS_BAR_ID = PLUGIN_ID + '-active-filters';
+    let activeFiltersData = {};
+
+    function parseUrlFilters() {
+        const params = new URLSearchParams(window.location.search);
+        const filters = {};
+        const filterParams = ['Genres', 'Tags', 'Studios', 'OfficialRatings', 'Years', 'VideoTypes'];
+        filterParams.forEach(function(param) {
+            const value = params.get(param);
+            if (value) {
+                filters[param] = value.split(',').map(function(v) { return decodeURIComponent(v); });
+            }
+        });
+        return filters;
+    }
+
+    function createActiveFiltersBar() {
+        let bar = document.getElementById(ACTIVE_FILTERS_BAR_ID);
+        if (!bar) {
+            bar = document.createElement('div');
+            bar.id = ACTIVE_FILTERS_BAR_ID;
+            bar.className = 'active-filters-bar hidden';
+        }
+        return bar;
+    }
+
+    function updateActiveFiltersBar() {
+        const filters = parseUrlFilters();
+        let bar = document.getElementById(ACTIVE_FILTERS_BAR_ID);
+        
+        const hasFilters = Object.keys(filters).some(function(key) {
+            return filters[key] && filters[key].length > 0;
+        });
+
+        if (!hasFilters) {
+            if (bar) bar.classList.add('hidden');
+            return;
+        }
+
+        // Find the appropriate container to insert the bar
+        const itemsContainer = document.querySelector('.itemsContainer, .view-content, [data-type="itemsContainer"]');
+        if (!itemsContainer) return;
+
+        if (!bar) {
+            bar = createActiveFiltersBar();
+        }
+
+        // Insert bar before items container if not already there
+        if (!bar.parentElement || bar.parentElement !== itemsContainer.parentElement) {
+            itemsContainer.parentElement.insertBefore(bar, itemsContainer);
+        }
+
+        // Build the bar content
+        bar.innerHTML = '';
+        bar.classList.remove('hidden');
+
+        const label = document.createElement('span');
+        label.className = 'active-filters-label';
+        label.textContent = 'Active Filters:';
+        bar.appendChild(label);
+
+        const categoryNames = {
+            'Genres': 'Genre',
+            'Tags': 'Tag',
+            'Studios': 'Studio',
+            'OfficialRatings': 'Rating',
+            'Years': 'Year',
+            'VideoTypes': 'Type'
+        };
+
+        Object.keys(filters).forEach(function(category) {
+            filters[category].forEach(function(value) {
+                const tag = document.createElement('span');
+                tag.className = 'active-filter-tag';
+                
+                const catSpan = document.createElement('span');
+                catSpan.className = 'filter-category';
+                catSpan.textContent = (categoryNames[category] || category) + ':';
+                tag.appendChild(catSpan);
+
+                const valueSpan = document.createElement('span');
+                valueSpan.textContent = value;
+                tag.appendChild(valueSpan);
+
+                const removeBtn = document.createElement('button');
+                removeBtn.className = 'remove-filter';
+                removeBtn.innerHTML = '×';
+                removeBtn.title = 'Remove filter';
+                removeBtn.addEventListener('click', function() {
+                    removeFilter(category, value);
+                });
+                tag.appendChild(removeBtn);
+
+                bar.appendChild(tag);
+            });
+        });
+
+        const clearAllBtn = document.createElement('button');
+        clearAllBtn.className = 'clear-all-filters-btn';
+        clearAllBtn.textContent = 'Clear All';
+        clearAllBtn.addEventListener('click', clearAllFilters);
+        bar.appendChild(clearAllBtn);
+    }
+
+    function removeFilter(category, value) {
+        const params = new URLSearchParams(window.location.search);
+        const currentValues = params.get(category);
+        if (currentValues) {
+            const values = currentValues.split(',').filter(function(v) {
+                return decodeURIComponent(v) !== value;
+            });
+            if (values.length > 0) {
+                params.set(category, values.join(','));
+            } else {
+                params.delete(category);
+            }
+            const newUrl = window.location.pathname + '?' + params.toString();
+            window.history.pushState({}, '', newUrl);
+            window.location.reload();
+        }
+    }
+
+    function clearAllFilters() {
+        const params = new URLSearchParams(window.location.search);
+        const filterParams = ['Genres', 'Tags', 'Studios', 'OfficialRatings', 'Years', 'VideoTypes'];
+        filterParams.forEach(function(param) {
+            params.delete(param);
+        });
+        const newUrl = window.location.pathname + (params.toString() ? '?' + params.toString() : '');
+        window.history.pushState({}, '', newUrl);
+        window.location.reload();
+    }
+
+    function setupPageObserver() {
+        // Update active filters bar when page content changes
+        let debounceTimer;
+        const pageObserver = new MutationObserver(function() {
+            clearTimeout(debounceTimer);
+            debounceTimer = setTimeout(updateActiveFiltersBar, 200);
+        });
+        pageObserver.observe(document.body, { childList: true, subtree: true });
+
+        // Also listen for URL changes (popstate)
+        window.addEventListener('popstate', function() {
+            setTimeout(updateActiveFiltersBar, 100);
+        });
+
+        // Initial update
+        setTimeout(updateActiveFiltersBar, 500);
+    }
+
     function init() {
         console.log('[' + PLUGIN_ID + '] Initializing Filter Search Plugin');
         injectStyles();
         setupObserver();
+        setupPageObserver();
         document.querySelectorAll('.filterDialog').forEach(processFilterDialog);
+        updateActiveFiltersBar();
         console.log('[' + PLUGIN_ID + '] Filter Search Plugin initialized successfully');
     }
 
@@ -328,6 +548,8 @@
     window.JellyfinFilterSearch = {
         init: init,
         processFilterDialog: processFilterDialog,
-        initializeSection: initializeSection
+        initializeSection: initializeSection,
+        updateActiveFiltersBar: updateActiveFiltersBar,
+        clearAllFilters: clearAllFilters
     };
 })();
