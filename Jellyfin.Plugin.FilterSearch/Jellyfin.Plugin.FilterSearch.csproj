@@ -2,13 +2,13 @@
 
   <PropertyGroup>
     <!-- <JellyfinVersion>10.10.7</JellyfinVersion> -->
-    <JellyfinVersion>10.11.6</JellyfinVersion>
+    <JellyfinVersion>10.11.8</JellyfinVersion>
     <TargetFramework Condition="$(JellyfinVersion.StartsWith('10.11'))">net9.0</TargetFramework>
     <TargetFramework Condition="'$(JellyfinVersion)' == '10.10.7'">net8.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
-    <AssemblyVersion>1.7.0.0</AssemblyVersion>
-    <FileVersion>1.7.0.0</FileVersion>
+    <AssemblyVersion>1.8.0.0</AssemblyVersion>
+    <FileVersion>1.8.0.0</FileVersion>
     <RootNamespace>Jellyfin.Plugin.FilterSearch</RootNamespace>
     <AssemblyName>Jellyfin.Plugin.FilterSearch</AssemblyName>
   </PropertyGroup>
