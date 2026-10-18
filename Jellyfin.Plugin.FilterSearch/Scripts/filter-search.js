@@ -2,6 +2,10 @@
  * Jellyfin Filter Search Plugin
  * Adds search functionality to filter dialogs (tags, genres, studios, etc.)
  * and displays enabled/checked filters at the top of the list.
+ *
+ * Supports both the legacy filter dialog (.filterDialog / emby-collapse) and the
+ * modern (React/MUI) layout introduced in Jellyfin 12, where filters live in a
+ * MUI Popover with accordions and FormControlLabel checkboxes.
  */
 
 (function() {
@@ -10,6 +14,7 @@
     const PLUGIN_ID = 'filter-search-plugin';
     const SEARCH_INPUT_CLASS = 'filter-search-input';
     const WRAPPER_CLASS = 'filter-search-wrapper';
+    const MODERN_CLASS = 'filter-search-modern';
 
     const styles = `
         .${WRAPPER_CLASS} {
@@ -87,6 +92,37 @@
         .filter-select-actions .filter-action-btn:hover {
             color: #0fbcff;
         }
+
+        /* Modern (MUI) layout overrides: theme-neutral colors, tighter spacing */
+        .${MODERN_CLASS} .${WRAPPER_CLASS} {
+            padding: 0 0 0.5em 0;
+            margin-top: -0.5em;
+            top: -16px;
+        }
+        .${MODERN_CLASS} .${SEARCH_INPUT_CLASS} {
+            border-color: rgba(128, 128, 128, 0.45);
+            background: rgba(128, 128, 128, 0.12);
+            font: inherit;
+            font-size: 0.9rem;
+        }
+        .${MODERN_CLASS} .${SEARCH_INPUT_CLASS}::placeholder {
+            color: inherit;
+            opacity: 0.55;
+        }
+        .${MODERN_CLASS} .filter-separator {
+            border-top-color: rgba(128, 128, 128, 0.35);
+        }
+        .${MODERN_CLASS} .filter-enabled-header {
+            color: inherit;
+            opacity: 0.65;
+        }
+        .${MODERN_CLASS} .no-results-message {
+            color: inherit;
+            opacity: 0.55;
+        }
+        .${MODERN_CLASS} .MuiFormGroup-root {
+            flex-wrap: nowrap;
+        }
     `;
 
     function injectStyles() {
@@ -123,8 +159,13 @@
     }
 
     function getItemText(item) {
+        // MUI FormControlLabel keeps the text in a dedicated span
+        const muiLabel = item.querySelector('.MuiFormControlLabel-label');
+        if (muiLabel) {
+            return muiLabel.textContent.trim().toLowerCase();
+        }
         const clone = item.cloneNode(true);
-        const toRemove = clone.querySelectorAll('input, .checkboxOutline, .material-icons, .md-icon, span.checkboxIcon');
+        const toRemove = clone.querySelectorAll('input, svg, .checkboxOutline, .material-icons, .md-icon, span.checkboxIcon');
         toRemove.forEach(function(el) { el.remove(); });
         return clone.textContent.trim().toLowerCase();
     }
@@ -141,6 +182,13 @@
             } else {
                 item.classList.add('filter-item-hidden');
             }
+        });
+        // Only show the "Selected" heading when at least one selected item is visible
+        const anyEnabledVisible = items.some(function(item) {
+            return item.classList.contains('filter-item-enabled') && !item.classList.contains('filter-item-hidden');
+        });
+        checkboxList.querySelectorAll('.filter-enabled-header, .filter-separator').forEach(function(el) {
+            el.classList.toggle('filter-item-hidden', !anyEnabledVisible);
         });
         let noResultsMsg = checkboxList.querySelector('.no-results-message');
         if (visibleCount === 0 && normalizedQuery !== '') {
@@ -198,10 +246,10 @@
 
         function setAll(checked, btn) {
             if (isProcessing) return;
-            
+
             var items = getFilterItems(checkboxList);
             var checkboxesToChange = [];
-            
+
             // Collect all checkboxes that need to change
             items.forEach(function(item) {
                 if (item.classList.contains('filter-item-hidden')) return;
@@ -210,9 +258,9 @@
                     checkboxesToChange.push(cb);
                 }
             });
-            
+
             if (checkboxesToChange.length === 0) return;
-            
+
             // Disable buttons and show progress
             isProcessing = true;
             var originalText = btn.textContent;
@@ -220,14 +268,14 @@
             selectNoneBtn.disabled = true;
             selectAllBtn.style.opacity = '0.5';
             selectNoneBtn.style.opacity = '0.5';
-            
+
             var total = checkboxesToChange.length;
             var index = 0;
-            
+
             function updateProgress() {
                 btn.textContent = originalText + ' (' + index + '/' + total + ')';
             }
-            
+
             function finishProcessing() {
                 isProcessing = false;
                 selectAllBtn.disabled = false;
@@ -235,12 +283,12 @@
                 selectAllBtn.style.opacity = '1';
                 selectNoneBtn.style.opacity = '1';
                 btn.textContent = originalText;
-                
+
                 var currentItems = getFilterItems(checkboxList);
                 sortEnabledToTop(currentItems, checkboxList);
                 if (searchInput) filterItems(currentItems, searchInput.value, checkboxList);
             }
-            
+
             // Click checkboxes one at a time with delay to avoid overwhelming the server
             var clickInterval = setInterval(function() {
                 if (index >= checkboxesToChange.length) {
@@ -248,7 +296,10 @@
                     setTimeout(finishProcessing, 150);
                     return;
                 }
-                checkboxesToChange[index].click();
+                // The checkbox may have been re-rendered or removed in the meantime
+                if (checkboxesToChange[index].isConnected && checkboxesToChange[index].checked !== checked) {
+                    checkboxesToChange[index].click();
+                }
                 index++;
                 updateProgress();
             }, 80); // 80ms delay between each click for server stability
@@ -262,19 +313,19 @@
         return wrapper;
     }
 
-    function initializeSection(collapseSection) {
-        const content = collapseSection.querySelector('.collapseContent, .filterOptions');
-        if (!content) return;
-        const checkboxList = content.querySelector('.checkboxList');
-        if (!checkboxList) return;
-        if (content.querySelector('.' + WRAPPER_CLASS)) return;
+    /**
+     * Wires search input, select actions and re-sorting into a filter section.
+     * @param {Element} content   Container that receives the search bar (above the list)
+     * @param {Element} checkboxList  Element containing the checkbox labels
+     * @param {string} title      Human readable section title
+     */
+    function attachSearch(content, checkboxList, title) {
+        if (content.querySelector('.' + WRAPPER_CLASS)) return false;
 
         const items = getFilterItems(checkboxList);
         sortEnabledToTop(items, checkboxList);
-        if (items.length < 5) return;
+        if (items.length < 5) return false;
 
-        const titleEl = collapseSection.querySelector('.emby-collapsible-title, h3');
-        const title = collapseSection.getAttribute('title') || (titleEl ? titleEl.textContent : 'filters');
         const placeholder = 'Search ' + title.toLowerCase() + '...';
 
         const searchWrapper = createSearchInput(placeholder);
@@ -285,21 +336,91 @@
         content.insertBefore(selectActions, checkboxList);
 
         searchInput.addEventListener('input', function(e) {
-            filterItems(items, e.target.value, checkboxList);
+            filterItems(getFilterItems(checkboxList), e.target.value, checkboxList);
         });
         searchInput.addEventListener('keydown', function(e) {
-            e.stopPropagation();
-        });
-        checkboxList.addEventListener('change', function(e) {
-            if (e.target.type === 'checkbox') {
-                setTimeout(function() {
-                    const currentItems = getFilterItems(checkboxList);
-                    sortEnabledToTop(currentItems, checkboxList);
-                    filterItems(currentItems, searchInput.value, checkboxList);
-                }, 10);
+            // Keep typing from triggering app-wide shortcuts, but let Escape/Tab
+            // reach the dialog so it can still be closed / navigated.
+            if (e.key !== 'Escape' && e.key !== 'Tab') {
+                e.stopPropagation();
             }
         });
+
+        var refreshTimer = null;
+        function refresh() {
+            refreshTimer = null;
+            if (!checkboxList.isConnected) return;
+            const currentItems = getFilterItems(checkboxList);
+            sortEnabledToTop(currentItems, checkboxList);
+            filterItems(currentItems, searchInput.value, checkboxList);
+        }
+        function scheduleRefresh(delay) {
+            if (refreshTimer) clearTimeout(refreshTimer);
+            refreshTimer = setTimeout(refresh, delay || 60);
+        }
+        checkboxList.addEventListener('change', function(e) {
+            if (e.target.type === 'checkbox') scheduleRefresh();
+        });
+        // React controlled checkboxes (modern layout) call preventDefault() in their
+        // click handler, which suppresses the native 'change' event, and the new
+        // checked state is only committed once React re-renders (which may take a
+        // moment on a large library). Re-evaluate shortly after the click and again
+        // a bit later as a fallback.
+        checkboxList.addEventListener('click', function(e) {
+            if (e.target.closest && e.target.closest('label')) {
+                scheduleRefresh(60);
+                setTimeout(function() { if (!refreshTimer) scheduleRefresh(10); }, 400);
+            }
+        });
+        // Primary trigger for the modern layout: MUI toggles the "Mui-checked" class on
+        // the checkbox element when React commits the new state. Ignore mutations caused
+        // by this plugin itself (label classes and the header/separator/no-results nodes).
+        if (typeof MutationObserver !== 'undefined') {
+            const isOwnNode = function(n) {
+                return n.nodeType === Node.ELEMENT_NODE && (
+                    n.tagName === 'LABEL' ||
+                    n.classList.contains('filter-enabled-header') ||
+                    n.classList.contains('filter-separator') ||
+                    n.classList.contains('no-results-message'));
+            };
+            const listObserver = new MutationObserver(function(mutations) {
+                if (!checkboxList.isConnected) { listObserver.disconnect(); return; }
+                for (var i = 0; i < mutations.length; i++) {
+                    const m = mutations[i];
+                    if (m.type === 'attributes') {
+                        if (m.target.nodeType === Node.ELEMENT_NODE && !isOwnNode(m.target) && m.target.closest('label')) {
+                            scheduleRefresh(10);
+                            return;
+                        }
+                    } else if (m.type === 'childList') {
+                        // React added/removed filter items (e.g. options reloaded)
+                        const nodes = Array.prototype.slice.call(m.addedNodes).concat(Array.prototype.slice.call(m.removedNodes));
+                        if (nodes.some(function(n) { return n.nodeType === Node.ELEMENT_NODE && n.tagName === 'LABEL'; })) {
+                            scheduleRefresh(10);
+                            return;
+                        }
+                    }
+                }
+            });
+            listObserver.observe(checkboxList, { attributes: true, attributeFilter: ['class'], subtree: true, childList: true });
+        }
         console.log('[' + PLUGIN_ID + '] Initialized search for: ' + title);
+        return true;
+    }
+
+    // ---------------------------------------------------------------------
+    // Legacy filter dialog (Jellyfin 10.x, and the Legacy Desktop/Mobile/TV display modes in 12.x)
+    // ---------------------------------------------------------------------
+
+    function initializeSection(collapseSection) {
+        const content = collapseSection.querySelector('.collapseContent, .filterOptions');
+        if (!content) return;
+        const checkboxList = content.querySelector('.checkboxList');
+        if (!checkboxList) return;
+
+        const titleEl = collapseSection.querySelector('.emby-collapsible-title, h3');
+        const title = collapseSection.getAttribute('title') || (titleEl ? titleEl.textContent : 'filters');
+        attachSearch(content, checkboxList, title);
     }
 
     function processFilterDialog(dialog) {
@@ -330,11 +451,105 @@
         });
     }
 
+    // ---------------------------------------------------------------------
+    // Modern layout (React/MUI, Jellyfin 12+ "Modern" and 10.11 "Experimental")
+    //
+    // DOM shape (see jellyfin-web apps/modern/.../filter/FilterButton.tsx):
+    //   .MuiPopover-root#filter-popover
+    //     .MuiPaper-root.MuiPopover-paper          <- scroll container
+    //       .MuiAccordion-root
+    //         .MuiAccordionSummary-root#filtersTags-header
+    //         .MuiCollapse-root > .MuiAccordion-region
+    //           .MuiAccordionDetails-root          <- mounted on expand (unmountOnExit)
+    //             .MuiFormGroup-root
+    //               label.MuiFormControlLabel-root > span.MuiCheckbox-root > input[type=checkbox]
+    //                                             > span.MuiFormControlLabel-label
+    // ---------------------------------------------------------------------
+
+    function isModernFilterDetails(details) {
+        const accordion = details.closest('.MuiAccordion-root');
+        if (!accordion) return false;
+        const summary = accordion.querySelector('.MuiAccordionSummary-root');
+        if (!summary) return false;
+        const id = summary.id || '';
+        const controls = summary.getAttribute('aria-controls') || '';
+        return /^filters/i.test(id) || /^filters/i.test(controls) || /languages-content$/i.test(controls);
+    }
+
+    function getModernSectionTitle(details) {
+        const accordion = details.closest('.MuiAccordion-root');
+        const summaryContent = accordion ? accordion.querySelector('.MuiAccordionSummary-content') : null;
+        const text = summaryContent ? summaryContent.textContent.trim() : '';
+        return text || 'filters';
+    }
+
+    function initializeModernSection(details) {
+        if (!details || !details.isConnected) return;
+        if (details.classList.contains(MODERN_CLASS)) return;
+        if (!isModernFilterDetails(details)) return;
+
+        const formGroup = details.querySelector('.MuiFormGroup-root');
+        if (!formGroup) return;
+        if (!formGroup.querySelector('input[type="checkbox"]')) return;
+
+        details.classList.add(MODERN_CLASS);
+
+        const title = getModernSectionTitle(details);
+        const attached = attachSearch(details, formGroup, title);
+        if (!attached) return;
+
+        // Give the sticky search bar an opaque background matching the popover paper
+        const paper = details.closest('.MuiPaper-root');
+        const wrapper = details.querySelector('.' + WRAPPER_CLASS);
+        if (paper && wrapper) {
+            const bg = window.getComputedStyle(paper).backgroundColor;
+            if (bg && bg !== 'rgba(0, 0, 0, 0)' && bg !== 'transparent') {
+                wrapper.style.background = bg;
+            }
+            // MUI Paper may paint its elevation via a background-image overlay
+            const bgImage = window.getComputedStyle(paper).backgroundImage;
+            if (bgImage && bgImage !== 'none') {
+                wrapper.style.backgroundImage = bgImage;
+            }
+        }
+    }
+
+    function processModernPopover(popover) {
+        popover.querySelectorAll('.MuiAccordionDetails-root').forEach(function(details) {
+            setTimeout(function() { initializeModernSection(details); }, 50);
+        });
+    }
+
+    function handleModernAddedNode(node) {
+        // Node is inside a popover (e.g. accordion details mounted on expand)
+        const popover = node.closest ? node.closest('.MuiPopover-root') : null;
+        if (popover) {
+            if (node.classList.contains('MuiAccordionDetails-root')) {
+                setTimeout(function() { initializeModernSection(node); }, 50);
+            } else {
+                node.querySelectorAll('.MuiAccordionDetails-root').forEach(function(details) {
+                    setTimeout(function() { initializeModernSection(details); }, 50);
+                });
+            }
+            return;
+        }
+        // Node is (or contains) a newly opened popover
+        if (node.classList.contains('MuiPopover-root')) {
+            processModernPopover(node);
+        } else if (node.querySelector) {
+            node.querySelectorAll('.MuiPopover-root').forEach(processModernPopover);
+        }
+    }
+
+    // ---------------------------------------------------------------------
+
     function setupObserver() {
         const observer = new MutationObserver(function(mutations) {
             mutations.forEach(function(mutation) {
                 mutation.addedNodes.forEach(function(node) {
                     if (node.nodeType !== Node.ELEMENT_NODE) return;
+
+                    // Legacy dialog
                     if (node.classList && (node.classList.contains('filterDialog') || node.classList.contains('dialogContainer'))) {
                         const dialog = node.classList.contains('filterDialog') ? node : node.querySelector('.filterDialog');
                         if (dialog) {
@@ -347,6 +562,9 @@
                             setTimeout(function() { processFilterDialog(dialog); }, 100);
                         }
                     }
+
+                    // Modern (MUI) layout
+                    handleModernAddedNode(node);
                 });
             });
         });
@@ -359,6 +577,7 @@
         injectStyles();
         setupObserver();
         document.querySelectorAll('.filterDialog').forEach(processFilterDialog);
+        document.querySelectorAll('.MuiPopover-root').forEach(processModernPopover);
         console.log('[' + PLUGIN_ID + '] Filter Search Plugin initialized successfully');
     }
 
@@ -371,6 +590,7 @@
     window.JellyfinFilterSearch = {
         init: init,
         processFilterDialog: processFilterDialog,
-        initializeSection: initializeSection
+        initializeSection: initializeSection,
+        initializeModernSection: initializeModernSection
     };
 })();

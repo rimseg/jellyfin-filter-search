@@ -2,13 +2,14 @@
 
   <PropertyGroup>
     <!-- <JellyfinVersion>10.10.7</JellyfinVersion> -->
-    <JellyfinVersion>10.11.8</JellyfinVersion>
+    <JellyfinVersion>12.2.0</JellyfinVersion>
     <TargetFramework Condition="$(JellyfinVersion.StartsWith('10.11'))">net9.0</TargetFramework>
+    <TargetFramework Condition="$(JellyfinVersion.StartsWith('12.'))">net10.0</TargetFramework>
     <TargetFramework Condition="'$(JellyfinVersion)' == '10.10.7'">net8.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
-    <AssemblyVersion>1.8.0.0</AssemblyVersion>
-    <FileVersion>1.8.0.0</FileVersion>
+    <AssemblyVersion>1.9.0.0</AssemblyVersion>
+    <FileVersion>1.9.0.0</FileVersion>
     <RootNamespace>Jellyfin.Plugin.FilterSearch</RootNamespace>
     <AssemblyName>Jellyfin.Plugin.FilterSearch</AssemblyName>
   </PropertyGroup>
@@ -24,7 +25,7 @@
     <Compile Remove="JellyfinVersionSpecific/10.10.7/*.cs" />
   </ItemGroup>
 
-  <ItemGroup Condition="!$(JellyfinVersion.StartsWith('10.11'))">
+  <ItemGroup Condition="!$(JellyfinVersion.StartsWith('10.11')) And !$(JellyfinVersion.StartsWith('12.'))">
     <Compile Remove="JellyfinVersionSpecific/10.11.0/*.cs" />
   </ItemGroup>
 
