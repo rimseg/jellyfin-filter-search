@@ -6,7 +6,7 @@
     "description": "Adds search functionality to filter dialogs (tags, genres, studios, etc.) and displays enabled/checked filters at the top of the list.",
     "owner": "rimseg",
     "category": "General",
-    "imageUrl": "https://raw.githubusercontent.com/rimseg/jellyfin-filter-search/main/icon.png",
+    "imageUrl": "https://raw.githubusercontent.com/rimseg/jellyfin-filter-search/main/docs/icon.png",
     "versions": [
       {
         "changelog": "For Jellyfin 12.2\n- Filter search, Select All/None and selected-to-top now work in the modern web UI (no need to switch to Legacy Desktop)\n- Legacy Desktop layout keeps working\n- \"Selected\" heading is hidden while a search hides all selected items\n- Built against Jellyfin 12.2.0 / .NET 10",

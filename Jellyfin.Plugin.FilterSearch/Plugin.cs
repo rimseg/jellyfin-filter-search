@@ -58,59 +58,6 @@ namespace Jellyfin.Plugin.FilterSearch
         public string IndexHtmlPath => Path.Combine(_appPaths.WebPath, "index.html");
 
         /// <summary>
-        /// Injects the filter search script into index.html.
-        /// </summary>
-        public void InjectScript()
-        {
-            var indexPath = IndexHtmlPath;
-            if (!File.Exists(indexPath))
-            {
-                _logger.LogError("Could not find index.html at path: {Path}", indexPath);
-                return;
-            }
-
-            var injectionBlock = JavascriptHelper.BuildInjectionBlock();
-            if (string.IsNullOrEmpty(injectionBlock))
-            {
-                _logger.LogError("Failed to build injection block - script is empty");
-                return;
-            }
-
-            try
-            {
-                var content = File.ReadAllText(indexPath);
-
-                // Check if already injected with current content
-                if (content.Contains(injectionBlock))
-                {
-                    _logger.LogInformation("Filter Search script is already correctly injected. No changes needed.");
-                    return;
-                }
-
-                // Remove any existing injection block first
-                var cleanupRegex = new Regex($"{Regex.Escape(JavascriptHelper.StartComment)}[\\s\\S]*?{Regex.Escape(JavascriptHelper.EndComment)}", RegexOptions.Multiline);
-                content = cleanupRegex.Replace(content, string.Empty);
-
-                // Inject before </body>
-                var closingBodyTag = "</body>";
-                if (content.Contains(closingBodyTag))
-                {
-                    content = content.Replace(closingBodyTag, $"{injectionBlock}\n{closingBodyTag}");
-                    File.WriteAllText(indexPath, content);
-                    _logger.LogInformation("Successfully injected Filter Search script into index.html");
-                }
-                else
-                {
-                    _logger.LogWarning("Could not find </body> tag in index.html. Script not injected.");
-                }
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error while trying to inject script into index.html");
-            }
-        }
-
-        /// <summary>
         /// Removes the filter search script from index.html.
         /// </summary>
         public void RemoveScript()

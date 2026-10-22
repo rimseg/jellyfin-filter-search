@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="icon-cutout.png" alt="Filter Search Plugin" width="300" height="300">
+  <img src="docs/icon-cutout.png" alt="Filter Search Plugin" width="300" height="300">
 </p>
 
 <h1 align="center">Jellyfin Filter Search Plugin</h1>
@@ -9,39 +9,26 @@
 </p>
 
 <p align="center">
+  <a href="https://jellyfin-filtersearch.rimsg.com/"><strong>Website</strong></a> ·
+  <a href="#installation">Installation</a> ·
+  <a href="#compatibility">Compatibility</a>
+</p>
+
+<p align="center">
   <img src="docs/demo-modern.gif" alt="Filter Search in the Jellyfin 12 modern layout" width="800">
 </p>
 
 ---
 
-## ⚠️ IMPORTANT: Required Setup After Installation
+## ✅ No extra setup (since 2.0)
 
-> **This plugin needs write access to `index.html` to inject JavaScript into the Jellyfin web interface.**
->
-> After installing the plugin, you **must** run one of the following commands depending on your setup:
+Since version **2.0.0.0** the plugin adds its script to the Jellyfin web client **in memory**, while Jellyfin serves the page. It never adds anything to `index.html` on disk, so:
 
-### 🐧 Linux (Native Installation)
-```bash
-sudo chown jellyfin:jellyfin /usr/share/jellyfin/web/index.html
-sudo systemctl restart jellyfin
-```
+- no `chown` of `index.html`, and nothing to redo after Jellyfin updates
+- no [File Transformation plugin](https://github.com/IAmParadox27/jellyfin-plugin-file-transformation) needed on Docker (if you already have it installed, both work side by side)
+- native Linux, Docker and Windows installs all work the same way
 
-### 🐳 Docker
-**Option A:** Install the [File Transformation Plugin](https://github.com/IAmParadox27/jellyfin-plugin-file-transformation) (recommended)
-
-**Option B:** Map `index.html` as a volume:
-```bash
-# Copy index.html from container
-docker cp jellyfin:/usr/share/jellyfin/web/index.html /path/to/config/index.html
-
-# Add to your docker-compose.yml volumes:
-- /path/to/config/index.html:/usr/share/jellyfin/web/index.html
-```
-
-### 🪟 Windows
-The plugin should work without additional setup on Windows.
-
-> **Note:** The `chown` command may need to be re-run after Jellyfin updates, as the update process may reset file ownership.
+> **Upgrading from 1.x?** 2.0 never adds anything to `index.html` on disk. On first start it removes the script block that 1.x wrote there, if the file is writable; if it is read-only, the old block stays and is harmless (the script still loads only once). You can revert an earlier `chown`. If you mounted a copy of `index.html` as a Docker volume for 1.x, **remove that mount**: the copy goes stale with every Jellyfin update. Filter Search no longer needs File Transformation; keep it if other plugins use it.
 
 ---
 
@@ -52,14 +39,16 @@ The plugin should work without additional setup on Windows.
 - **Select All / None** – Check or uncheck every option that matches the current search in one click
 - **Sticky search bar** – The search input stays visible while scrolling
 - **Modern and Legacy layouts** – Works in the Jellyfin 12 modern web UI and in the "Legacy Desktop" display mode
+- **Big libraries** – Tested with 3,000 tags: searching stays well under a tenth of a second, long tag names wrap cleanly
+- **No extra setup** – No file permissions to change and no second plugin required
 
 ## Compatibility
 
 | Jellyfin version | Plugin version | Layouts |
 |------------------|----------------|---------|
-| 12.2.x           | 1.9.0.0        | Modern and Legacy |
-| 10.11.x          | 1.8.0.0        | Legacy |
-| 10.10.x          | 1.7.0.0        | Legacy |
+| 12.2.x           | 2.0.0.0        | Modern and Legacy |
+| 10.11.8 and newer | 1.8.0.0      | Legacy |
+| 10.11.0 – 10.11.7, 10.10.7 | 1.7.0.0 | Legacy |
 
 ## Demo
 
@@ -80,7 +69,6 @@ The plugin should work without additional setup on Windows.
    ```
 3. Go to **Catalog** and install **Filter Search**
 4. Restart Jellyfin
-5. **⚠️ Follow the [Required Setup](#️-important-required-setup-after-installation) above!**
 
 ## Configuration
 
@@ -112,12 +100,17 @@ The built plugin will be in `bin/Release/net10.0/` (or `net9.0` / `net8.0` for o
 
 ### Install Manually
 
-Copy `Jellyfin.Plugin.FilterSearch.dll` to your Jellyfin plugins directory:
-- **Linux:** `/var/lib/jellyfin/plugins/FilterSearch/` (Debian/Ubuntu packages) or `~/.local/share/jellyfin/plugins/FilterSearch/`
-- **Windows:** `%APPDATA%\Jellyfin\Server\plugins\FilterSearch\`
-- **Docker:** `/config/plugins/FilterSearch/`
+Installing from the plugin catalog is easiest. To install a build by hand:
 
-Then restart Jellyfin.
+1. **Remove any installed version first.** Uninstall Filter Search under **Dashboard → Plugins** and restart, or stop Jellyfin and delete the existing `Filter Search_<version>` folder. If an old version stays next to the new one, Jellyfin loads both.
+2. Stop Jellyfin.
+3. Create the folder `Filter Search_2.0.0.0` in your Jellyfin plugins directory and copy `Jellyfin.Plugin.FilterSearch.dll` into it:
+   - **Linux (Debian/Ubuntu packages):** `/var/lib/jellyfin/plugins/`
+   - **Linux (other):** `~/.local/share/jellyfin/plugins/`
+   - **Windows:** `C:\ProgramData\Jellyfin\Server\plugins\`
+   - **Docker:** `/config/plugins/` (linuxserver.io images: `/config/data/plugins/`)
+4. Make sure the folder is readable by the user Jellyfin runs as (on Linux: `sudo chown -R jellyfin:jellyfin "/var/lib/jellyfin/plugins/Filter Search_2.0.0.0"`).
+5. Start Jellyfin. **Dashboard → Plugins** should list Filter Search 2.0.0.0.
 
 ### Building for Different Jellyfin Versions
 
@@ -136,8 +129,10 @@ Edit the `JellyfinVersion` property in `Jellyfin.Plugin.FilterSearch.csproj`:
 
 ## Notes
 
-- Version 1.9.0.0 and later target Jellyfin 12.x and support both the modern layout and the "Legacy Desktop" display mode
-- For Jellyfin 10.10.x / 10.11.x use the older releases listed under [Compatibility](#compatibility)
+- Version 2.0.0.0 targets Jellyfin 12.2 and supports both the modern layout and the "Legacy Desktop" display mode
+- The script is added to the web client by an ASP.NET Core `IStartupFilter` middleware, so nothing is added to `index.html` on disk
+- Search, Select All / None and the "Selected" group appear in filter sections with five or more options
+- For Jellyfin 10.10.7 and 10.11.x use the older releases listed under [Compatibility](#compatibility)
 
 ## Credits
 
@@ -145,4 +140,4 @@ Edit the `JellyfinVersion` property in `Jellyfin.Plugin.FilterSearch.csproj`:
 
 ## License
 
-MIT License
+[MIT](LICENSE)

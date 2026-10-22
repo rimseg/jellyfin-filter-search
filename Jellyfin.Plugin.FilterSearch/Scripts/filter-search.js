@@ -15,6 +15,12 @@
     const SEARCH_INPUT_CLASS = 'filter-search-input';
     const WRAPPER_CLASS = 'filter-search-wrapper';
     const MODERN_CLASS = 'filter-search-modern';
+    const LEGACY_CLASS = 'filter-search-legacy';
+    const NAVIGATION_KEYS = ['Escape', 'Tab', 'ArrowUp', 'ArrowDown', 'GoBack', 'BrowserBack'];
+    // Jellyfin resolves remote/gamepad keys by keyCode: Escape, Up, Down, UWP gamepad/navigation
+    // keys, webOS Back (461) and Tizen Back (10009).
+    const NAVIGATION_KEYCODES = [27, 38, 40, 138, 139, 196, 203, 204, 211, 212, 461, 10009];
+    const REFRESH_EVENT = 'filtersearch-refresh';
 
     const styles = `
         .${WRAPPER_CLASS} {
@@ -27,9 +33,9 @@
         .${SEARCH_INPUT_CLASS} {
             width: 100%;
             padding: 0.5em 0.8em;
-            border: 1px solid rgba(255, 255, 255, 0.2);
+            border: 1px solid rgba(128, 128, 128, 0.45);
             border-radius: 4px;
-            background: rgba(0, 0, 0, 0.3);
+            background: rgba(128, 128, 128, 0.12);
             color: inherit;
             font-size: 0.9em;
             outline: none;
@@ -40,7 +46,8 @@
             box-shadow: 0 0 0 2px rgba(0, 164, 220, 0.2);
         }
         .${SEARCH_INPUT_CLASS}::placeholder {
-            color: rgba(255, 255, 255, 0.5);
+            color: inherit;
+            opacity: 0.55;
         }
         .filter-item-hidden {
             display: none !important;
@@ -48,20 +55,21 @@
         .filter-item-enabled {
             order: -1 !important;
         }
-        .checkboxList {
+        .filterDialog .checkboxList:not(.hide) {
             display: flex !important;
             flex-direction: column !important;
         }
         .filter-separator {
             width: 100%;
             border: none;
-            border-top: 1px solid rgba(255, 255, 255, 0.15);
+            border-top: 1px solid rgba(128, 128, 128, 0.35);
             margin: 0.5em 0;
             order: -1;
         }
         .filter-enabled-header {
             font-size: 0.8em;
-            color: rgba(255, 255, 255, 0.6);
+            color: inherit;
+            opacity: 0.65;
             padding: 0.2em 0;
             order: -2;
             font-weight: 500;
@@ -69,7 +77,8 @@
         .no-results-message {
             padding: 0.5em;
             text-align: center;
-            color: rgba(255, 255, 255, 0.5);
+            color: inherit;
+            opacity: 0.55;
             font-style: italic;
             font-size: 0.9em;
         }
@@ -93,35 +102,25 @@
             color: #0fbcff;
         }
 
-        /* Modern (MUI) layout overrides: theme-neutral colors, tighter spacing */
+        /* Modern (MUI) layout: tighter spacing and the app's font */
         .${MODERN_CLASS} .${WRAPPER_CLASS} {
             padding: 0 0 0.5em 0;
             margin-top: -0.5em;
             top: -16px;
         }
         .${MODERN_CLASS} .${SEARCH_INPUT_CLASS} {
-            border-color: rgba(128, 128, 128, 0.45);
-            background: rgba(128, 128, 128, 0.12);
             font: inherit;
             font-size: 0.9rem;
         }
-        .${MODERN_CLASS} .${SEARCH_INPUT_CLASS}::placeholder {
-            color: inherit;
-            opacity: 0.55;
-        }
-        .${MODERN_CLASS} .filter-separator {
-            border-top-color: rgba(128, 128, 128, 0.35);
-        }
-        .${MODERN_CLASS} .filter-enabled-header {
-            color: inherit;
-            opacity: 0.65;
-        }
-        .${MODERN_CLASS} .no-results-message {
-            color: inherit;
-            opacity: 0.55;
-        }
         .${MODERN_CLASS} .MuiFormGroup-root {
             flex-wrap: nowrap;
+        }
+
+        /* Legacy layout: Jellyfin fixes checkbox rows at 2.35em, so long names overlap
+           the next rows. Let rows in sections managed by this plugin grow instead. */
+        .${LEGACY_CLASS} .checkboxList > .emby-checkbox-label {
+            height: auto;
+            min-height: 2.35em;
         }
     `;
 
@@ -149,25 +148,46 @@
     function getFilterItems(container) {
         const items = container.querySelectorAll('label');
         return Array.from(items).filter(function(label) {
+            // Jellyfin hides options that don't apply to the current view with .hide (for example the
+            // episode-only filters in a movie library). Never count, search or click those.
+            if (label.classList.contains('hide')) return false;
             return label.querySelector('input[type="checkbox"]') || label.classList.contains('emby-checkbox-label');
         });
     }
 
-    function isItemEnabled(item) {
-        const checkbox = item.querySelector('input[type="checkbox"]');
-        return checkbox ? checkbox.checked : false;
+    /**
+     * Whether a filter checkbox is checked. In the modern (MUI) layout the "Mui-checked"
+     * class reflects React's state as soon as it renders, while the input's checked
+     * property can lag behind by a second or more on large lists.
+     */
+    function isCheckboxChecked(checkbox) {
+        const muiRoot = checkbox.closest('.MuiCheckbox-root');
+        return muiRoot ? muiRoot.classList.contains('Mui-checked') : checkbox.checked;
     }
 
+    function isItemEnabled(item) {
+        const checkbox = item.querySelector('input[type="checkbox"]');
+        return checkbox ? isCheckboxChecked(checkbox) : false;
+    }
+
+    // Label text never changes for a given element, so compute it once per element
+    const itemTextCache = new WeakMap();
+
     function getItemText(item) {
+        let text = itemTextCache.get(item);
+        if (text !== undefined) return text;
         // MUI FormControlLabel keeps the text in a dedicated span
         const muiLabel = item.querySelector('.MuiFormControlLabel-label');
         if (muiLabel) {
-            return muiLabel.textContent.trim().toLowerCase();
+            text = muiLabel.textContent.trim().toLowerCase();
+        } else {
+            const clone = item.cloneNode(true);
+            const toRemove = clone.querySelectorAll('input, svg, .checkboxOutline, .material-icons, .md-icon, span.checkboxIcon');
+            toRemove.forEach(function(el) { el.remove(); });
+            text = clone.textContent.trim().toLowerCase();
         }
-        const clone = item.cloneNode(true);
-        const toRemove = clone.querySelectorAll('input, svg, .checkboxOutline, .material-icons, .md-icon, span.checkboxIcon');
-        toRemove.forEach(function(el) { el.remove(); });
-        return clone.textContent.trim().toLowerCase();
+        itemTextCache.set(item, text);
+        return text;
     }
 
     function filterItems(items, query, checkboxList) {
@@ -254,7 +274,7 @@
             items.forEach(function(item) {
                 if (item.classList.contains('filter-item-hidden')) return;
                 var cb = item.querySelector('input[type="checkbox"]');
-                if (cb && cb.checked !== checked) {
+                if (cb && isCheckboxChecked(cb) !== checked) {
                     checkboxesToChange.push(cb);
                 }
             });
@@ -297,7 +317,7 @@
                     return;
                 }
                 // The checkbox may have been re-rendered or removed in the meantime
-                if (checkboxesToChange[index].isConnected && checkboxesToChange[index].checked !== checked) {
+                if (checkboxesToChange[index].isConnected && isCheckboxChecked(checkboxesToChange[index]) !== checked) {
                     checkboxesToChange[index].click();
                 }
                 index++;
@@ -323,8 +343,8 @@
         if (content.querySelector('.' + WRAPPER_CLASS)) return false;
 
         const items = getFilterItems(checkboxList);
-        sortEnabledToTop(items, checkboxList);
         if (items.length < 5) return false;
+        sortEnabledToTop(items, checkboxList);
 
         const placeholder = 'Search ' + title.toLowerCase() + '...';
 
@@ -339,9 +359,9 @@
             filterItems(getFilterItems(checkboxList), e.target.value, checkboxList);
         });
         searchInput.addEventListener('keydown', function(e) {
-            // Keep typing from triggering app-wide shortcuts, but let Escape/Tab
-            // reach the dialog so it can still be closed / navigated.
-            if (e.key !== 'Escape' && e.key !== 'Tab') {
+            // Keep typing from triggering app-wide shortcuts, but let keys through that close or
+            // navigate the dialog (keyboard, TV remotes and gamepads).
+            if (NAVIGATION_KEYS.indexOf(e.key) === -1 && NAVIGATION_KEYCODES.indexOf(e.keyCode) === -1) {
                 e.stopPropagation();
             }
         });
@@ -361,6 +381,9 @@
         checkboxList.addEventListener('change', function(e) {
             if (e.target.type === 'checkbox') scheduleRefresh();
         });
+        // Fired by this script when something outside the list changes the checkboxes
+        // (the legacy dialog's "Reset Filters" sets checked = false without events).
+        checkboxList.addEventListener(REFRESH_EVENT, function() { scheduleRefresh(10); });
         // React controlled checkboxes (modern layout) call preventDefault() in their
         // click handler, which suppresses the native 'change' event, and the new
         // checked state is only committed once React re-renders (which may take a
@@ -420,10 +443,23 @@
 
         const titleEl = collapseSection.querySelector('.emby-collapsible-title, h3');
         const title = collapseSection.getAttribute('title') || (titleEl ? titleEl.textContent : 'filters');
-        attachSearch(content, checkboxList, title);
+        if (attachSearch(content, checkboxList, title)) {
+            content.classList.add(LEGACY_CLASS);
+        }
     }
 
     function processFilterDialog(dialog) {
+        if (!dialog.dataset.filterSearchReset) {
+            dialog.dataset.filterSearchReset = '1';
+            dialog.addEventListener('click', function(e) {
+                if (!e.target.closest || !e.target.closest('.resetFilters')) return;
+                setTimeout(function() {
+                    dialog.querySelectorAll('.' + LEGACY_CLASS + ' .checkboxList').forEach(function(list) {
+                        list.dispatchEvent(new CustomEvent(REFRESH_EVENT));
+                    });
+                }, 50);
+            });
+        }
         const collapseSections = dialog.querySelectorAll('[is="emby-collapse"], .emby-collapse');
         collapseSections.forEach(function(section) {
             const content = section.querySelector('.collapseContent');
