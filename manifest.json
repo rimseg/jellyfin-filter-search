@@ -9,6 +9,14 @@
     "imageUrl": "https://raw.githubusercontent.com/rimseg/jellyfin-filter-search/main/docs/icon.png",
     "versions": [
       {
+        "changelog": "For Jellyfin 12.2\n- No setup anymore: the script is added in memory while Jellyfin serves the web client (no chown, no File Transformation plugin, nothing written to index.html)\n- Removes the script block that 1.x wrote to index.html, when the file is writable\n- Modern UI: the \"Selected\" group stays correct on very large lists\n- Legacy UI: Select All skips hidden options, Reset Filters refreshes the list, long names wrap, light theme is readable\n- Remote control and gamepad keys leave the search box\n- Built against Jellyfin 12.2.0 / .NET 10",
+        "targetAbi": "12.2.0.0",
+        "version": "2.0.0.0",
+        "sourceUrl": "https://github.com/rimseg/jellyfin-filter-search/releases/download/2.0.0.0/Jellyfin.Plugin.FilterSearch_12.2.0.zip",
+        "checksum": "94a78687fc7168a2b047559e5a3f58db",
+        "timestamp": "2026-10-22T00:00:00"
+      },
+      {
         "changelog": "For Jellyfin 12.2\n- Filter search, Select All/None and selected-to-top now work in the modern web UI (no need to switch to Legacy Desktop)\n- Legacy Desktop layout keeps working\n- \"Selected\" heading is hidden while a search hides all selected items\n- Built against Jellyfin 12.2.0 / .NET 10",
         "targetAbi": "12.2.0.0",
         "version": "1.9.0.0",
